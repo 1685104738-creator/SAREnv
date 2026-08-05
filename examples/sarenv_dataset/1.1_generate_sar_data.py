@@ -1,69 +1,70 @@
-import os
+"""Generate the reusable base SAREnv master dataset."""
 
-import geopandas as gpd
-import numpy as np
+import json
 from pathlib import Path
-import shapely
+
+import numpy as np
 from sarenv import (
-    CLIMATE_DRY,
     CLIMATE_TEMPERATE,
     ENVIRONMENT_TYPE_FLAT,
-    ENVIRONMENT_TYPE_MOUNTAINOUS,
     DataGenerator,
     get_logger,
 )
 
 log = get_logger()
 
-def run_export_example():
-    """
-    An example function demonstrating how to use the DataGenerator
-    to export features and heatmaps for all quantiles.
-    """
-    log.info("--- Starting DataGenerator Export Example ---")
+EXAMPLE_DIRECTORY = Path(__file__).resolve().parent
+OUTPUT_DIRECTORY = (
+    EXAMPLE_DIRECTORY / "sarenv_outputs" / "radiation_area_01"
+)
 
-    # 1. Initialize the generator.
+
+def run_base_dataset_export_example():
+    """Export one reusable xlarge base dataset without hazard layers."""
+    log.info("--- Starting Base SAREnv Dataset Export Example ---")
+
     data_gen = DataGenerator()
+    initial_planning_point = (-2.66962,51.42351)
 
-    # 2. Define a center point and an output directory for the dataset.
-    initial_planning_point =  -2.66962,51.42351
-    output_dir = "sarenv_outputs/test_area_01"
-
-    # 3. Run the main export function.
+    # This is the only example step that accesses Overpass and regenerates the
+    # lost-person probability raster.
     data_gen.export_dataset(
         center_point=initial_planning_point,
-        output_directory=output_dir,
+        output_directory=str(OUTPUT_DIRECTORY),
         environment_climate=CLIMATE_TEMPERATE,
         environment_type=ENVIRONMENT_TYPE_FLAT,
         meter_per_bin=30,
     )
 
-    log.info("--- Verifying exported files ---")
-    try:
-        # Check the files for the 'median' quantile
-        master_heatmap_path = os.path.join(output_dir, "heatmap.npy")
-        master_features_path = os.path.join(output_dir, "features.geojson")
+    heatmap_path = OUTPUT_DIRECTORY / "heatmap.npy"
+    features_path = OUTPUT_DIRECTORY / "features.geojson"
+    metadata_path = OUTPUT_DIRECTORY / "metadata.json"
+    expected_paths = (heatmap_path, features_path, metadata_path)
+    missing_paths = [path for path in expected_paths if not path.exists()]
+    if missing_paths:
+        missing_text = ", ".join(str(path) for path in missing_paths)
+        message = f"Base dataset export is missing: {missing_text}"
+        raise FileNotFoundError(message)
 
-        if os.path.exists(master_heatmap_path):
-            heatmap_matrix = np.load(master_heatmap_path)
-            log.info(f"Loaded heatmap 'heatmap.npy'. Shape: {heatmap_matrix.shape}")
-            # You could now use this matrix for analysis or as input to a model.
-        else:
-            log.error(f"Verification failed: {master_heatmap_path} not found.")
+    heatmap = np.load(heatmap_path, allow_pickle=False)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if tuple(metadata["raster_shape"]) != heatmap.shape:
+        raise ValueError(
+            "Base metadata raster shape does not match heatmap.npy."
+        )
 
-        if os.path.exists(master_features_path):
-            features_gdf = gpd.read_file(master_features_path)
-            log.info(
-                f"Loaded features 'features.geojson'. Found {len(features_gdf)} features."
-            )
-            log.info("Sample of loaded features:")
-            print(features_gdf.head())
-        else:
-            log.error(f"Verification failed: {master_features_path} not found.")
-
-    except Exception as e:
-        log.error(f"An error occurred during verification: {e}", exc_info=True)
+    log.info("--- Base SAREnv dataset exported successfully ---")
+    log.info(f"Output directory: {OUTPUT_DIRECTORY}")
+    log.info(
+        f"Master raster shape: {heatmap.shape}; "
+        f"lost-person probability sum: {heatmap.sum():.6f}"
+    )
+    log.info(
+        f"CRS: {metadata['projected_crs']}; "
+        f"resolution: {metadata['meter_per_bin']:.1f} m/bin"
+    )
+    return OUTPUT_DIRECTORY
 
 
 if __name__ == "__main__":
-    run_export_example()
+    run_base_dataset_export_example()

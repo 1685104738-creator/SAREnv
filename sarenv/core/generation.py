@@ -29,6 +29,9 @@ from .geometries import GeoPolygon
 
 log = logging_setup.get_logger()
 EPS = 1e-9
+# The public Overpass endpoint reports two slots, and two workers completed the
+# controlled full-feature acquisition without connection-timeout storms.
+OVERPASS_MAX_WORKERS = 2
 from ..utils.lost_person_behavior import (
     FEATURE_PROBABILITIES,
     CLIMATE_TEMPERATE,
@@ -47,7 +50,9 @@ def process_feature_osm(key_val_pair, query_polygon_wgs84, projected_crs):
     osm_geometries_dict = query_features(query_polygon_wgs84, tag_dict)
 
     if osm_geometries_dict is None:  # query_features now returns a dict or None
-        log.warning(f"No geometries returned from OSM query for features: {key}")
+        log.warning(
+            f"OSM feature data could not be retrieved or processed for: {key}"
+        )
         return key, None  # Return key and None for the GeoDataFrame
 
     all_geoms_for_key = []
@@ -332,7 +337,14 @@ class Environment:
         query_polygon_wgs84 = GeoPolygon(self.polygon.geometry, crs=self.polygon.crs)
         query_polygon_wgs84.set_crs("EPSG:4326")  # Ensure the query polygon is in WGS84
 
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        log.info(
+            "Loading %d OSM feature categories with max_workers=%d",
+            len(self.tags),
+            OVERPASS_MAX_WORKERS,
+        )
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=OVERPASS_MAX_WORKERS
+        ) as executor:
             # Prepare arguments for each process
             tasks = [
                 (item, query_polygon_wgs84, self.projected_crs)
@@ -354,7 +366,7 @@ class Environment:
                             f"Stored {len(feature_gdf)} features for '{key}' in CRS {feature_gdf.crs}"
                         )
                     else:
-                        log.info(f"No features stored for '{key}'")
+                        log.info(f"No usable OSM feature data stored for '{key}'")
                 except Exception as exc:
                     log.error(f"Error processing feature {key}: {exc}", exc_info=True)
                     self.features[key] = None
@@ -881,6 +893,39 @@ class DataGenerator:
         log.info(
             f"Exported master probability map (shape: {final_probability_map.shape}) to {heatmap_path}"
         )
+
+        base_metadata = {
+            "schema_version": 1,
+            "dataset_type": "sarenv_base",
+            "center_point": [float(value) for value in center_point],
+            "environment_type": environment_type,
+            "climate": environment_climate,
+            "meter_per_bin": float(meter_per_bin),
+            "radius_km": float(
+                get_environment_radius_by_size(
+                    environment_type,
+                    environment_climate,
+                    "xlarge",
+                )
+            ),
+            "projected_crs": str(master_env.projected_crs),
+            "bounds_projected": [
+                float(master_env.minx),
+                float(master_env.miny),
+                float(master_env.maxx),
+                float(master_env.maxy),
+            ],
+            "raster_shape": [
+                int(final_probability_map.shape[0]),
+                int(final_probability_map.shape[1]),
+            ],
+            "raster_origin": "lower",
+            "raster_axis_order": "row_y_column_x",
+        }
+        metadata_path = os.path.join(output_directory, "metadata.json")
+        with open(metadata_path, "w", encoding="utf-8") as metadata_file:
+            json.dump(base_metadata, metadata_file, indent=2, sort_keys=True)
+        log.info(f"Exported base dataset metadata to {metadata_path}")
 
         log.info("--- Master dataset export completed. ---")
 

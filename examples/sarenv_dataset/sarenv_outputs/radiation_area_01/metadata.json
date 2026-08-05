@@ -1,0 +1,25 @@
+{
+  "bounds_projected": [
+    513070.920497467,
+    5687074.290406497,
+    532870.920497467,
+    5706874.290406497
+  ],
+  "center_point": [
+    -2.66962,
+    51.42351
+  ],
+  "climate": "temperate",
+  "dataset_type": "sarenv_base",
+  "environment_type": "flat",
+  "meter_per_bin": 30.0,
+  "projected_crs": "EPSG:32630",
+  "radius_km": 9.9,
+  "raster_axis_order": "row_y_column_x",
+  "raster_origin": "lower",
+  "raster_shape": [
+    660,
+    660
+  ],
+  "schema_version": 1
+}
