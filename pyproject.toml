@@ -20,8 +20,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 
-[tool.setuptools]
-packages = ["sarenv"]
+[tool.setuptools.packages.find]
+include = ["sarenv*"]
 [project.optional-dependencies]
 test = ["pytest"]
 

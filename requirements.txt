@@ -12,5 +12,6 @@ scikit-image
 opencv-python
 plotly
 rasterio 
+scipy
 elevation
 seaborn

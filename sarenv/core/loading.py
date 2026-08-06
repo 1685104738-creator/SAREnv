@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from typing import Tuple
+import warnings
 
 import geopandas as gpd
 import numpy as np
@@ -30,8 +31,8 @@ class SARDatasetItem:
         bounds (tuple[float, float, float, float]): The projected bounds (minx, miny, maxx, maxy) of the data.
         features (gpd.GeoDataFrame): A GeoDataFrame containing all geographic features.
         heatmap (np.ndarray): A 2D NumPy array representing the probability heatmap. Its sum reflects the probability mass within this clip.
-        layers (dict[str, np.ndarray]): Optional aligned raster layers. Radiation
-            is available under ``layers["radiation"]`` when present.
+        layers (dict[str, np.ndarray]): Optional rasters aligned to the SAR
+            heatmap, currently used for persisted feature masks only.
     """
 
     size: str
@@ -46,8 +47,14 @@ class SARDatasetItem:
 
     @property
     def radiation_map(self) -> np.ndarray | None:
-        """Return the optional radiation layer without copying its array."""
-        return self.layers.get("radiation")
+        """Deprecated: radiation is no longer a heatmap-aligned SAR layer."""
+        warnings.warn(
+            "SARDatasetItem.radiation_map is deprecated. Load independent "
+            "radiation patches through sarenv.radiation instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return None
 
     @property
     def feature_masks(self) -> dict[str, np.ndarray]:
@@ -85,9 +92,6 @@ class DatasetLoader:
             self.dataset_directory, "features.geojson"
         )
         self.master_heatmap_path = os.path.join(self.dataset_directory, "heatmap.npy")
-        self.master_radiation_path = os.path.join(
-            self.dataset_directory, "radiation.npy"
-        )
         self.master_feature_masks_path = os.path.join(
             self.dataset_directory, "feature_masks.npz"
         )
@@ -156,19 +160,6 @@ class DatasetLoader:
                 f"Loaded master probability map with shape {self._master_probability_map.shape}"
             )
 
-            if os.path.exists(self.master_radiation_path):
-                radiation_map = np.load(
-                    self.master_radiation_path, allow_pickle=False
-                )
-                self._validate_optional_layer(
-                    "radiation", radiation_map, require_finite=True
-                )
-                self._master_layers["radiation"] = radiation_map
-                log.info(
-                    "Loaded optional master radiation layer with shape "
-                    f"{radiation_map.shape}"
-                )
-
             if os.path.exists(self.master_feature_masks_path):
                 with np.load(
                     self.master_feature_masks_path, allow_pickle=False
@@ -184,7 +175,7 @@ class DatasetLoader:
                         self._master_layers[layer_name] = feature_mask
                 log.info(
                     "Loaded optional master feature masks: "
-                    f"{len(self._master_layers) - int('radiation' in self._master_layers)}"
+                    f"{len(self._master_layers)}"
                 )
 
         except KeyError as e:
