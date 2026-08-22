@@ -87,7 +87,9 @@ class PointSource:
     def to_metadata(self) -> dict[str, object]:
         """Return JSON-ready point-source metadata."""
         return {
+            "schema_version": 1,
             "model_type": "analytic_point_source",
+            "scenario_type": "point_only",
             "propagation_model": self.config.model_name,
             "quantity": "synthetic_excess_gamma_dose_rate",
             "background_included": False,

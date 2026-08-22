@@ -3,11 +3,10 @@
 from shapely.geometry import box
 
 from sarenv.radiation import (
-    BenchmarkSurfaceResponseConfig,
-    BenchmarkSurfaceResponseKernel,
     UniformPolygonConfig,
     UniformPolygonSource,
 )
+from sarenv.radiation.surface import MEDIUM_ACTIVITY_DENSITY_BQ_M2
 
 from _common import run_surface_example
 
@@ -16,14 +15,11 @@ source = UniformPolygonSource(
     UniformPolygonConfig(
         source_id="uniform_rectangle",
         geometry=box(500_000, 5_700_000, 500_080, 5_700_050),
-        nominal_surface_field_uSv_h=5.0,
+        activity_density_bq_m2=MEDIUM_ACTIVITY_DENSITY_BQ_M2,
         crs="EPSG:32630",
     )
-)
-kernel = BenchmarkSurfaceResponseKernel.create(
-    BenchmarkSurfaceResponseConfig(core_radius_m=2.0, cutoff_radius_m=20.0)
 )
 
 
 if __name__ == "__main__":
-    run_surface_example("01_uniform_rectangle", source, kernel)
+    run_surface_example("01_uniform_rectangle_cs137", source)

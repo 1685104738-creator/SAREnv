@@ -1,4 +1,4 @@
-"""Generate the reusable base SAREnv master dataset."""
+"""Generate a reusable base SAREnv dataset directly at the requested size."""
 
 import json
 from pathlib import Path
@@ -17,10 +17,11 @@ EXAMPLE_DIRECTORY = Path(__file__).resolve().parent
 OUTPUT_DIRECTORY = (
     EXAMPLE_DIRECTORY / "sarenv_outputs" / "radiation_area_01"
 )
+TARGET_SIZE = "small"
 
 
 def run_base_dataset_export_example():
-    """Export one reusable xlarge base dataset without hazard layers."""
+    """Export one reusable Small base dataset without hazard layers."""
     log.info("--- Starting Base SAREnv Dataset Export Example ---")
 
     data_gen = DataGenerator()
@@ -34,6 +35,7 @@ def run_base_dataset_export_example():
         environment_climate=CLIMATE_TEMPERATE,
         environment_type=ENVIRONMENT_TYPE_FLAT,
         meter_per_bin=30,
+        target_size=TARGET_SIZE,
     )
 
     heatmap_path = OUTPUT_DIRECTORY / "heatmap.npy"
@@ -55,8 +57,9 @@ def run_base_dataset_export_example():
 
     log.info("--- Base SAREnv dataset exported successfully ---")
     log.info(f"Output directory: {OUTPUT_DIRECTORY}")
+    log.info(f"Requested environment size: {TARGET_SIZE}")
     log.info(
-        f"Master raster shape: {heatmap.shape}; "
+        f"Raster shape: {heatmap.shape}; "
         f"lost-person probability sum: {heatmap.sum():.6f}"
     )
     log.info(

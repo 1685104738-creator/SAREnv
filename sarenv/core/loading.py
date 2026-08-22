@@ -11,9 +11,11 @@ import warnings
 import geopandas as gpd
 import numpy as np
 import shapely
+from pyproj import CRS
 
 from sarenv.utils.logging_setup import get_logger
 from sarenv.utils.lost_person_behavior import get_environment_radius_by_size, get_available_sizes
+from sarenv.utils.geo import get_utm_epsg
 log = get_logger()
 
 FEATURE_MASK_LAYER_PREFIX = "feature_mask:"
@@ -43,6 +45,8 @@ class SARDatasetItem:
     heatmap: np.ndarray
     environment_climate: str
     environment_type: str
+    meter_per_bin: float = 30.0
+    projected_crs: str | None = None
     layers: dict[str, np.ndarray] = field(default_factory=dict)
 
     @property
@@ -68,10 +72,11 @@ class SARDatasetItem:
 
 class DatasetLoader:
     """
-    Loads a master SAR environment dataset and dynamically clips it to various sizes.
+    Load a SAR dataset according to its saved spatial contract.
 
-    This class is designed to load the 'master' files created by the
-    DataGenerator's export_dataset method and then process them on-the-fly.
+    ``metadata.json`` is authoritative for current datasets. A requested size
+    equal to the saved size is returned without cropping. Cropping is allowed
+    only from a larger saved dataset to a smaller requested size.
     """
 
     def __init__(self, dataset_directory: str):
@@ -92,6 +97,7 @@ class DatasetLoader:
             self.dataset_directory, "features.geojson"
         )
         self.master_heatmap_path = os.path.join(self.dataset_directory, "heatmap.npy")
+        self.metadata_path = os.path.join(self.dataset_directory, "metadata.json")
         self.master_feature_masks_path = os.path.join(
             self.dataset_directory, "feature_masks.npz"
         )
@@ -116,48 +122,271 @@ class DatasetLoader:
         self._bounds = None
         self._climate = None
         self._environment_type = None
+        self._dataset_size = None
+        self._dataset_radius_km = None
+        self._metadata = None
 
-    def _get_utm_epsg(self, lon: float, lat: float) -> str:
-        """Calculates the appropriate UTM zone EPSG code for a given point."""
-        zone = int((lon + 180) / 6) + 1
-        return f"326{zone}" if lat >= 0 else f"327{zone}"
+    def _infer_legacy_size(self, radius_km: float) -> str:
+        """Resolve an old dataset size explicitly from its saved radius."""
+        matching_sizes = [
+            size
+            for size in get_available_sizes()
+            if np.isclose(
+                get_environment_radius_by_size(
+                    self._environment_type, self._climate, size
+                ),
+                radius_km,
+            )
+        ]
+        if len(matching_sizes) != 1:
+            raise ValueError(
+                "Legacy dataset metadata does not identify a unique "
+                f"environment size for radius_km={radius_km}."
+            )
+        warnings.warn(
+            "Dataset metadata has no environment_size; using the explicit "
+            f"legacy radius mapping to resolve '{matching_sizes[0]}'.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return matching_sizes[0]
+
+    @staticmethod
+    def _metadata_value(
+        metadata: dict,
+        geojson_data: dict,
+        metadata_key: str,
+        geojson_key: str | None = None,
+    ):
+        """Read a current metadata value with an explicit legacy fallback."""
+        if metadata_key in metadata:
+            return metadata[metadata_key]
+        legacy_key = geojson_key or metadata_key
+        if legacy_key in geojson_data:
+            return geojson_data[legacy_key]
+        raise KeyError(metadata_key)
+
+    @staticmethod
+    def _validate_duplicate_metadata(
+        metadata: dict,
+        geojson_data: dict,
+    ) -> None:
+        """Reject conflicting duplicated base metadata instead of guessing."""
+        key_pairs = {
+            "center_point": "center_point",
+            "environment_type": "environment_type",
+            "climate": "climate",
+            "meter_per_bin": "meter_per_bin",
+            "radius_km": "radius_km",
+            "environment_size": "environment_size",
+            "bounds_projected": "bounds",
+        }
+        for metadata_key, geojson_key in key_pairs.items():
+            if metadata_key not in metadata or geojson_key not in geojson_data:
+                continue
+            authoritative = metadata[metadata_key]
+            duplicate = geojson_data[geojson_key]
+            if isinstance(authoritative, (list, tuple)):
+                matches = np.allclose(authoritative, duplicate, rtol=0.0, atol=1e-6)
+            elif isinstance(authoritative, (int, float)):
+                matches = np.isclose(authoritative, duplicate, rtol=0.0, atol=1e-9)
+            else:
+                matches = authoritative == duplicate
+            if not matches:
+                raise ValueError(
+                    f"metadata.json {metadata_key!r} conflicts with "
+                    f"features.geojson {geojson_key!r}."
+                )
 
     def _load_master_data_if_needed(self):
         """Loads the master GeoJSON and probability map from disk if not already in cache."""
         if self._master_probability_map is not None:
             return
 
-        log.info("Loading master dataset from disk for the first time...")
+        log.info("Loading SAR dataset from disk for the first time...")
         try:
-            with open(self.master_features_path, "r") as f:
+            with open(self.master_features_path, "r", encoding="utf-8") as f:
                 geojson_data = json.load(f)
 
-            # --- Load Metadata ---
-            self._center_point = tuple(geojson_data["center_point"])
-            self._meter_per_bin = geojson_data["meter_per_bin"]
-            self._bounds = tuple(geojson_data["bounds"])
-            self._climate = geojson_data["climate"]
-            self._environment_type = geojson_data["environment_type"]
-            log.info(
-                f"Loaded metadata: center={self._center_point}, resolution={self._meter_per_bin} m/bin"
-            )
+            metadata = {}
+            if os.path.exists(self.metadata_path):
+                with open(self.metadata_path, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+                if not isinstance(metadata, dict):
+                    raise ValueError("metadata.json must contain a JSON object.")
+                self._validate_duplicate_metadata(metadata, geojson_data)
+                if "environment_size" in metadata:
+                    expected_contract = {
+                        "schema_version": 1,
+                        "dataset_type": "sarenv_base",
+                        "quantity": "lost_person_probability",
+                        "probability_contract": (
+                            "sum_to_one_within_saved_environment"
+                        ),
+                        "heatmap_filename": "heatmap.npy",
+                        "features_filename": "features.geojson",
+                        "raster_origin": "lower",
+                        "raster_axis_order": "row_y_column_x",
+                    }
+                    for key, expected_value in expected_contract.items():
+                        if metadata.get(key) != expected_value:
+                            raise ValueError(
+                                f"Current SAR metadata contract {key!r} is "
+                                "missing or incompatible."
+                            )
+            else:
+                warnings.warn(
+                    "metadata.json is missing; loading explicit legacy metadata "
+                    "from features.geojson.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
-            # --- Determine Projected CRS ---
-            self._projected_crs = f"EPSG:{self._get_utm_epsg(self._center_point[0], self._center_point[1])}"
+            self._metadata = metadata
+            self._center_point = tuple(
+                float(value)
+                for value in self._metadata_value(
+                    metadata, geojson_data, "center_point"
+                )
+            )
+            self._meter_per_bin = float(
+                self._metadata_value(
+                    metadata, geojson_data, "meter_per_bin"
+                )
+            )
+            if not np.isfinite(self._meter_per_bin) or self._meter_per_bin <= 0:
+                raise ValueError("Saved meter_per_bin must be finite and positive.")
+            self._bounds = tuple(
+                float(value)
+                for value in self._metadata_value(
+                    metadata,
+                    geojson_data,
+                    "bounds_projected",
+                    "bounds",
+                )
+            )
+            if len(self._bounds) != 4 or not np.isfinite(self._bounds).all():
+                raise ValueError("Saved projected bounds must contain four finite values.")
+            if self._bounds[2] <= self._bounds[0] or self._bounds[3] <= self._bounds[1]:
+                raise ValueError("Saved projected bounds are invalid.")
+            self._climate = str(
+                self._metadata_value(metadata, geojson_data, "climate")
+            )
+            self._environment_type = str(
+                self._metadata_value(
+                    metadata, geojson_data, "environment_type"
+                )
+            )
+            self._dataset_radius_km = float(
+                self._metadata_value(metadata, geojson_data, "radius_km")
+            )
+            saved_size = metadata.get(
+                "environment_size", geojson_data.get("environment_size")
+            )
+            self._dataset_size = (
+                str(saved_size)
+                if saved_size is not None
+                else self._infer_legacy_size(self._dataset_radius_km)
+            )
+            if self._dataset_size not in get_available_sizes():
+                raise ValueError(
+                    f"Unsupported saved environment_size: {self._dataset_size!r}."
+                )
+            expected_radius_km = get_environment_radius_by_size(
+                self._environment_type,
+                self._climate,
+                self._dataset_size,
+            )
+            if not np.isclose(
+                self._dataset_radius_km,
+                expected_radius_km,
+                rtol=0.0,
+                atol=1e-9,
+            ):
+                raise ValueError(
+                    "Saved radius_km is inconsistent with environment_size, "
+                    "environment_type, and climate."
+                )
+            projected_crs = metadata.get("projected_crs")
+            self._projected_crs = (
+                str(projected_crs)
+                if projected_crs is not None
+                else get_utm_epsg(
+                    self._center_point[0], self._center_point[1]
+                )
+            )
+            if not CRS.from_user_input(self._projected_crs).is_projected:
+                raise ValueError("Saved SAR projected_crs must be a projected CRS.")
+            log.info(
+                "Loaded authoritative dataset metadata: size=%s, center=%s, "
+                "resolution=%s m/bin, CRS=%s",
+                self._dataset_size,
+                self._center_point,
+                self._meter_per_bin,
+                self._projected_crs,
+            )
 
             # --- Load Main Data ---
-            self._master_features_gdf = gpd.GeoDataFrame.from_features(
-                geojson_data["features"], crs="EPSG:4326"
-            )
+            feature_values = geojson_data.get("features")
+            if not isinstance(feature_values, list):
+                raise ValueError("features.geojson 'features' must be a list.")
+            if feature_values:
+                self._master_features_gdf = gpd.GeoDataFrame.from_features(
+                    feature_values, crs="EPSG:4326"
+                )
+            else:
+                self._master_features_gdf = gpd.GeoDataFrame(
+                    {"geometry": []}, geometry="geometry", crs="EPSG:4326"
+                )
             self._master_features_gdf_proj = self._master_features_gdf.to_crs(
                 self._projected_crs
             )
-            # Load the pre-combined and pre-normalized probability map
             self._master_probability_map = np.load(
                 self.master_heatmap_path, allow_pickle=False
             )
+            if self._master_probability_map.ndim != 2:
+                raise ValueError("heatmap.npy must contain one 2D array.")
+            if not np.isfinite(self._master_probability_map).all() or (
+                self._master_probability_map < 0
+            ).any():
+                raise ValueError(
+                    "heatmap.npy must contain finite, non-negative probabilities."
+                )
+            saved_shape = metadata.get("raster_shape")
+            if saved_shape is not None and tuple(saved_shape) != (
+                self._master_probability_map.shape
+            ):
+                raise ValueError(
+                    "heatmap.npy shape does not match metadata.json raster_shape."
+                )
+            expected_width_m = (
+                self._master_probability_map.shape[1] * self._meter_per_bin
+            )
+            expected_height_m = (
+                self._master_probability_map.shape[0] * self._meter_per_bin
+            )
+            saved_width_m = self._bounds[2] - self._bounds[0]
+            saved_height_m = self._bounds[3] - self._bounds[1]
+            if not np.isclose(
+                saved_width_m, expected_width_m, rtol=0.0, atol=1e-6
+            ) or not np.isclose(
+                saved_height_m, expected_height_m, rtol=0.0, atol=1e-6
+            ):
+                raise ValueError(
+                    "Saved bounds, meter_per_bin, and heatmap shape describe "
+                    "different raster extents."
+                )
+            if "environment_size" in metadata and not np.isclose(
+                self._master_probability_map.sum(), 1.0, atol=1e-6
+            ):
+                raise ValueError(
+                    "A current direct-size SAR dataset must contain a heatmap "
+                    "whose probability sum is 1.0."
+                )
             log.info(
-                f"Loaded master probability map with shape {self._master_probability_map.shape}"
+                "Loaded probability map with shape %s and sum %.12f",
+                self._master_probability_map.shape,
+                self._master_probability_map.sum(),
             )
 
             if os.path.exists(self.master_feature_masks_path):
@@ -219,7 +448,13 @@ class DatasetLoader:
         y_img = (y_world - master_miny) / self._meter_per_bin
         return x_img.astype(int), y_img.astype(int)
 
-    def load_environment(self, size: str) -> SARDatasetItem | None:
+    @property
+    def dataset_size(self) -> str:
+        """Return the authoritative saved environment size."""
+        self._load_master_data_if_needed()
+        return self._dataset_size
+
+    def load_environment(self, size: str | None = None) -> SARDatasetItem | None:
         """
         Loads the master data and clips it to a specified size. The resulting
         heatmap is a crop of the master probability map, and its sum will reflect
@@ -231,8 +466,22 @@ class DatasetLoader:
         Returns:
             SARDatasetItem | None: A dataclass instance containing the clipped/cropped data.
         """
-        log.info(f"Attempting to generate dataset for size: '{size}'")
         self._load_master_data_if_needed()
+        requested_size = self._dataset_size if size is None else size
+        if requested_size not in get_available_sizes():
+            raise ValueError(f"Unsupported requested environment size: {requested_size!r}.")
+        saved_index = get_available_sizes().index(self._dataset_size)
+        requested_index = get_available_sizes().index(requested_size)
+        if requested_index > saved_index:
+            raise ValueError(
+                f"Cannot load '{requested_size}' from a physically smaller "
+                f"'{self._dataset_size}' dataset."
+            )
+        log.info(
+            "Loading environment size '%s' from saved '%s' dataset.",
+            requested_size,
+            self._dataset_size,
+        )
 
         if self._master_probability_map is None:
             log.error(
@@ -241,8 +490,27 @@ class DatasetLoader:
             return None
 
         radius_km = get_environment_radius_by_size(
-            self._environment_type, self._climate, size
+            self._environment_type, self._climate, requested_size
         )
+
+        if requested_size == self._dataset_size:
+            log.info(
+                "Requested size equals saved size; returning stored arrays "
+                "without cropping or renormalisation."
+            )
+            return SARDatasetItem(
+                size=requested_size,
+                center_point=self._center_point,
+                radius_km=self._dataset_radius_km,
+                bounds=self._bounds,
+                features=self._master_features_gdf_proj,
+                heatmap=self._master_probability_map,
+                environment_climate=self._climate,
+                environment_type=self._environment_type,
+                meter_per_bin=self._meter_per_bin,
+                projected_crs=self._projected_crs,
+                layers=dict(self._master_layers),
+            )
 
         # Create clipping geometry for features
         clipping_point_wgs84 = gpd.GeoDataFrame(
@@ -256,7 +524,7 @@ class DatasetLoader:
             self._master_features_gdf_proj, clipping_circle_proj
         )
         log.info(
-            f"Clipped features to {len(clipped_features_proj)} items for size '{size}'."
+            f"Clipped features to {len(clipped_features_proj)} items for size '{requested_size}'."
         )
 
         # Get pixel boundaries for cropping the heatmap
@@ -294,7 +562,7 @@ class DatasetLoader:
         # Its sum reflects its portion of the total probability.
         final_heatmap = np.where(mask, cropped_map, 0)
         log.info(
-            f"Final heatmap for size '{size}' has a probability sum of {np.sum(final_heatmap):.4f}"
+            f"Final heatmap for size '{requested_size}' has a probability sum of {np.sum(final_heatmap):.4f}"
         )
 
         final_layers = {}
@@ -311,7 +579,7 @@ class DatasetLoader:
             final_layers[layer_name] = np.where(mask, cropped_layer, 0)
 
         return SARDatasetItem(
-            size=size,
+            size=requested_size,
             center_point=self._center_point,
             radius_km=radius_km,
             bounds=clipped_bounds,
@@ -319,6 +587,8 @@ class DatasetLoader:
             heatmap=final_heatmap,
             environment_climate=self._climate,
             environment_type=self._environment_type,
+            meter_per_bin=self._meter_per_bin,
+            projected_crs=self._projected_crs,
             layers=final_layers,
         )
 
@@ -330,9 +600,11 @@ class DatasetLoader:
             dict[str, SARDatasetItem]: A dictionary where keys are size names
                                        and values are the corresponding SARDatasetItem objects.
         """
-        log.info("Loading all available sizes from the master dataset.")
+        self._load_master_data_if_needed()
+        log.info("Loading all sizes supported by the saved dataset.")
         all_data = {}
-        for size in get_available_sizes():
+        maximum_index = get_available_sizes().index(self._dataset_size)
+        for size in get_available_sizes()[: maximum_index + 1]:
             item = self.load_environment(size)
             if item:
                 all_data[size] = item

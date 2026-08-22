@@ -7,6 +7,11 @@ from .analytics.evaluator import ComparativeEvaluator
 from .core.generation import DataGenerator
 from .core.loading import DatasetLoader, SARDatasetItem
 from .core.lost_person import LostPersonLocationGenerator
+from .io.lost_person import (
+    LostPersonLocations,
+    load_lost_person_locations,
+    save_lost_person_locations,
+)
 from .utils.logging_setup import get_logger
 from .utils.lost_person_behavior import (
     FEATURE_PROBABILITIES,
@@ -58,6 +63,9 @@ __all__ = [
     "SARDatasetItem",
     "RadiationConfig",
     "LostPersonLocationGenerator",
+    "LostPersonLocations",
+    "load_lost_person_locations",
+    "save_lost_person_locations",
     "get_logger",
     "ENVIRONMENT_TYPE_FLAT",
     "ENVIRONMENT_TYPE_MOUNTAINOUS",

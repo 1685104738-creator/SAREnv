@@ -15,9 +15,9 @@ from sarenv import DataGenerator
 from sarenv.core.radiation import RadiationConfig, generate_radiation_field
 from sarenv.io.radiation_layer import generate_radiation_layer
 from sarenv.radiation import (
-    BenchmarkSurfaceResponseConfig,
-    BenchmarkSurfaceResponseKernel,
     GridSpec,
+    SurfacePhotonResponseConfig,
+    SurfacePhotonResponseKernel,
     TerrainContext,
     UniformPolygonConfig,
     UniformPolygonSource,
@@ -87,13 +87,15 @@ def test_surface_generation_does_not_read_sar_heatmap(tmp_path):
             context.projected_crs,
         )
     )
-    kernel = BenchmarkSurfaceResponseKernel.create(
-        BenchmarkSurfaceResponseConfig(1.0, 3.0)
+    grid = GridSpec.from_bounds(source.bounds, context.projected_crs)
+    kernel = SurfacePhotonResponseKernel.create(
+        SurfacePhotonResponseConfig(), grid
     )
-    result = simulate_surface_source(source, kernel)
-    assert result.nominal_surface_field.shape == (8, 10)
-    assert result.dose_rate_patch.excess_uSv_h.shape == (14, 16)
-    assert result.nominal_grid.resolution_m == 1.0
+    result = simulate_surface_source(source, kernel, nominal_grid=grid)
+    assert result.activity_density_bq_m2.shape == (8, 10)
+    assert result.photon_fluence_rate_patch.photon_fluence_rate.shape == (8, 10)
+    assert result.collision_air_kerma_rate_patch.grid.resolution_m == 1.0
+    assert not (dataset / "heatmap.npy").exists()
 
 
 def test_legacy_heatmap_aligned_api_is_deprecated_and_disabled():

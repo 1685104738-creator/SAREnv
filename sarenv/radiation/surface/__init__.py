@@ -1,26 +1,80 @@
-"""Deterministic Uniform and Zoned Polygon radiation sources."""
+"""Deterministic physical Uniform and Zoned Polygon radiation sources."""
 
 from .config import (
+    AIR_DENSITY_KG_M3,
     BenchmarkSurfaceResponseConfig,
+    COLLISION_AIR_KERMA_RATE_UNIT,
+    CS137_FLUENCE_TO_KERMA_UGY_H,
+    CS137_PROFILE,
+    GAMMA_ENERGY_MEV,
+    GAMMA_YIELD_PER_DECAY,
+    GY_TO_UGY,
+    HALF_LIFE_YEARS,
+    HIGH_ACTIVITY_DENSITY_BQ_M2,
+    LOW_ACTIVITY_DENSITY_BQ_M2,
+    MASS_ATTENUATION_COEFF_AIR_M2_KG,
+    MASS_ENERGY_ABSORPTION_COEFF_AIR_M2_KG,
+    MEDIUM_ACTIVITY_DENSITY_BQ_M2,
+    MEV_TO_J,
+    MU_AIR_M_INV,
+    OBSERVATION_HEIGHT_M,
+    RADIONUCLIDE_NAME,
+    RASTER_RESOLUTION_M,
+    RadionuclideProfile,
+    SECONDS_PER_HOUR,
+    SurfacePhotonResponseConfig,
     SurfaceZone,
     UniformPolygonConfig,
     ZonedPolygonConfig,
 )
-from .dose_patch import DoseRatePatch
-from .response_kernel import BenchmarkSurfaceResponseKernel
+from .dose_patch import (
+    CollisionAirKermaRatePatch,
+    DoseRatePatch,
+    PhotonFluenceRatePatch,
+)
+from .kerma import photon_fluence_to_collision_air_kerma_rate
+from .response_kernel import (
+    BenchmarkSurfaceResponseKernel,
+    SurfacePhotonResponseKernel,
+)
 from .simulator import SurfaceSimulationResult, simulate_surface_source
 from .uniform_polygon import UniformPolygonSource
 from .zoned_polygon import ZonedPolygonSource
 
 __all__ = [
+    "AIR_DENSITY_KG_M3",
     "BenchmarkSurfaceResponseConfig",
     "BenchmarkSurfaceResponseKernel",
+    "COLLISION_AIR_KERMA_RATE_UNIT",
+    "CS137_FLUENCE_TO_KERMA_UGY_H",
+    "CS137_PROFILE",
+    "CollisionAirKermaRatePatch",
     "DoseRatePatch",
+    "GAMMA_ENERGY_MEV",
+    "GAMMA_YIELD_PER_DECAY",
+    "GY_TO_UGY",
+    "HALF_LIFE_YEARS",
+    "HIGH_ACTIVITY_DENSITY_BQ_M2",
+    "LOW_ACTIVITY_DENSITY_BQ_M2",
+    "MASS_ATTENUATION_COEFF_AIR_M2_KG",
+    "MASS_ENERGY_ABSORPTION_COEFF_AIR_M2_KG",
+    "MEDIUM_ACTIVITY_DENSITY_BQ_M2",
+    "MEV_TO_J",
+    "MU_AIR_M_INV",
+    "OBSERVATION_HEIGHT_M",
+    "PhotonFluenceRatePatch",
+    "RADIONUCLIDE_NAME",
+    "RASTER_RESOLUTION_M",
+    "RadionuclideProfile",
+    "SECONDS_PER_HOUR",
+    "SurfacePhotonResponseConfig",
+    "SurfacePhotonResponseKernel",
     "SurfaceSimulationResult",
     "SurfaceZone",
     "UniformPolygonConfig",
     "UniformPolygonSource",
     "ZonedPolygonConfig",
     "ZonedPolygonSource",
+    "photon_fluence_to_collision_air_kerma_rate",
     "simulate_surface_source",
 ]

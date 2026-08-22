@@ -6,6 +6,252 @@ import numpy as np
 from shapely.geometry import LineString, Point
 from shapely.ops import substring
 
+
+GREEDY_NEIGHBOUR_OFFSETS = (
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+)
+
+
+def _greedy_grid_geometry(
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+) -> tuple[int, int, float, float, float, float]:
+    height, width = map_shape
+    minx, miny, maxx, maxy = bounds
+    dx = (maxx - minx) / width
+    dy = (maxy - miny) / height
+    return height, width, dx, dy, minx + dx / 2, miny + dy / 2
+
+
+def greedy_grid_position_to_world(
+    row: int,
+    col: int,
+    *,
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float]:
+    """Return the SAR cell centre using Original Greedy's coordinate mapping."""
+    _, _, dx, dy, x_offset, y_offset = _greedy_grid_geometry(map_shape, bounds)
+    return x_offset + col * dx, y_offset + row * dy
+
+
+def greedy_world_to_grid_position(
+    x_m: float,
+    y_m: float,
+    *,
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+) -> tuple[int, int]:
+    """Map a world position as Original Greedy maps its starting position."""
+    height, width, dx, dy, _, _ = _greedy_grid_geometry(map_shape, bounds)
+    minx, miny, _, _ = bounds
+    col = np.clip(int((x_m - minx) / dx), 0, width - 1)
+    row = np.clip(int((y_m - miny) / dy), 0, height - 1)
+    return int(row), int(col)
+
+
+def _greedy_visible_cells_with_geometry(
+    row: int,
+    col: int,
+    *,
+    height: int,
+    width: int,
+    dx: float,
+    dy: float,
+    x_offset: float,
+    y_offset: float,
+    detection_radius_m: float,
+) -> set[tuple[int, int]]:
+    detection_radius_cells_x = int(np.ceil(detection_radius_m / dx))
+    detection_radius_cells_y = int(np.ceil(detection_radius_m / dy))
+    world_x = x_offset + col * dx
+    world_y = y_offset + row * dy
+    visible_cells = set()
+    for visible_row in range(
+        max(0, row - detection_radius_cells_y),
+        min(height, row + detection_radius_cells_y + 1),
+    ):
+        for visible_col in range(
+            max(0, col - detection_radius_cells_x),
+            min(width, col + detection_radius_cells_x + 1),
+        ):
+            cell_x = x_offset + visible_col * dx
+            cell_y = y_offset + visible_row * dy
+            distance = np.sqrt(
+                (cell_x - world_x) ** 2 + (cell_y - world_y) ** 2
+            )
+            if distance <= detection_radius_m:
+                visible_cells.add((visible_row, visible_col))
+    return visible_cells
+
+
+def greedy_visible_cells(
+    row: int,
+    col: int,
+    *,
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+    detection_radius_m: float,
+) -> set[tuple[int, int]]:
+    """Return SAR cells visible from one executed or candidate grid position."""
+    height, width, dx, dy, x_offset, y_offset = _greedy_grid_geometry(
+        map_shape, bounds
+    )
+    return _greedy_visible_cells_with_geometry(
+        row,
+        col,
+        height=height,
+        width=width,
+        dx=dx,
+        dy=dy,
+        x_offset=x_offset,
+        y_offset=y_offset,
+        detection_radius_m=detection_radius_m,
+    )
+
+
+def score_greedy_neighbours(
+    current_position: tuple[int, int],
+    observed_cells: set[tuple[int, int]],
+    *,
+    probability_map: np.ndarray,
+    bounds: tuple[float, float, float, float],
+    search_center: tuple[float, float],
+    max_radius: float,
+    detection_radius_m: float,
+) -> list[tuple[tuple[int, int], float]]:
+    """Score Original Greedy's valid 8-connected neighbours without selecting."""
+    height, width, dx, dy, x_offset, y_offset = _greedy_grid_geometry(
+        probability_map.shape, bounds
+    )
+    center_x, center_y = search_center
+    max_radius_sq = max_radius * max_radius
+    current_row, current_col = current_position
+    candidates = []
+    for row_offset, col_offset in GREEDY_NEIGHBOUR_OFFSETS:
+        row = current_row + row_offset
+        col = current_col + col_offset
+        if row < 0 or row >= height or col < 0 or col >= width:
+            continue
+
+        world_x = x_offset + col * dx
+        world_y = y_offset + row * dy
+        distance_squared = (
+            (world_x - center_x) ** 2 + (world_y - center_y) ** 2
+        )
+        if distance_squared >= max_radius_sq:
+            continue
+
+        visible_cells = _greedy_visible_cells_with_geometry(
+            row,
+            col,
+            height=height,
+            width=width,
+            dx=dx,
+            dy=dy,
+            x_offset=x_offset,
+            y_offset=y_offset,
+            detection_radius_m=detection_radius_m,
+        )
+        new_cells = visible_cells - observed_cells
+        score = sum(probability_map[r, c] for r, c in new_cells)
+        candidates.append(((row, col), score))
+    return candidates
+
+
+def select_original_greedy_candidate(
+    candidates: list[tuple[tuple[int, int], float]],
+    rng: np.random.Generator,
+) -> tuple[int, int] | None:
+    """Apply Original Greedy's score maximum and zero-score random fallback."""
+    if not candidates:
+        return None
+    best_position, maximum_score = max(candidates, key=lambda item: item[1])
+    if maximum_score <= 0:
+        random_index = rng.choice(len(candidates))
+        return candidates[random_index][0]
+    return best_position
+
+
+def generate_greedy_continuation_route(
+    *,
+    current_position_m: tuple[float, float],
+    observed_cells: set[tuple[int, int]] | frozenset[tuple[int, int]],
+    search_center: tuple[float, float],
+    remaining_budget_m: float,
+    probability_map: np.ndarray,
+    bounds: tuple[float, float, float, float],
+    max_radius: float,
+    fov_deg: float,
+    altitude: float,
+    rng: np.random.Generator | None = None,
+) -> LineString:
+    """Generate one Original Greedy continuation from actually executed state."""
+    if remaining_budget_m <= 0:
+        return LineString()
+    if rng is None:
+        rng = np.random.default_rng()
+
+    detection_radius_m = altitude * np.tan(np.radians(fov_deg / 2))
+    current_grid_position = greedy_world_to_grid_position(
+        *current_position_m,
+        map_shape=probability_map.shape,
+        bounds=bounds,
+    )
+    working_observed_cells = set(observed_cells)
+    planned_grid_positions = [current_grid_position]
+    planned_world_positions = [
+        (float(current_position_m[0]), float(current_position_m[1]))
+    ]
+    _, _, dx, _, _, _ = _greedy_grid_geometry(probability_map.shape, bounds)
+    max_iterations = remaining_budget_m // dx
+
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
+        candidates = score_greedy_neighbours(
+            current_grid_position,
+            working_observed_cells,
+            probability_map=probability_map,
+            bounds=bounds,
+            search_center=search_center,
+            max_radius=max_radius,
+            detection_radius_m=detection_radius_m,
+        )
+        next_grid_position = select_original_greedy_candidate(candidates, rng)
+        if next_grid_position is None:
+            break
+
+        current_grid_position = next_grid_position
+        planned_grid_positions.append(current_grid_position)
+        planned_world_positions.append(
+            greedy_grid_position_to_world(
+                *current_grid_position,
+                map_shape=probability_map.shape,
+                bounds=bounds,
+            )
+        )
+        working_observed_cells.update(
+            greedy_visible_cells(
+                *current_grid_position,
+                map_shape=probability_map.shape,
+                bounds=bounds,
+                detection_radius_m=detection_radius_m,
+            )
+        )
+
+    if len(planned_grid_positions) <= 1:
+        return LineString()
+    route = LineString(planned_world_positions)
+    return restrict_path_length(route, remaining_budget_m)
+
 def split_path_for_drones(path: LineString, num_drones: int) -> list[LineString]:
     if num_drones <= 1 or path.is_empty or path.length == 0:
         return [path]
@@ -111,46 +357,10 @@ def generate_greedy_path(center_x: float, center_y: float, num_drones: int, prob
     x_offset = minx + dx / 2
     y_offset = miny + dy / 2
 
-    # Convert detection radius to grid cells
-    detection_radius_cells_x = int(np.ceil(detection_radius / dx))
-    detection_radius_cells_y = int(np.ceil(detection_radius / dy))
-
-    def get_visible_cells_from_grid_pos(row: int, col: int) -> set[tuple[int, int]]:
-        """Get all grid cells visible from a grid position considering detection radius."""
-        visible_cells = set()
-        world_x = x_offset + col * dx
-        world_y = y_offset + row * dy
-        
-        # Check all cells within the detection radius
-        for r in range(max(0, row - detection_radius_cells_y),
-                      min(height, row + detection_radius_cells_y + 1)):
-            for c in range(max(0, col - detection_radius_cells_x),
-                          min(width, col + detection_radius_cells_x + 1)):
-                
-                # Calculate world coordinates of this cell's center
-                cell_x = x_offset + c * dx
-                cell_y = y_offset + r * dy
-                
-                # Check if within detection radius
-                distance = np.sqrt((cell_x - world_x) ** 2 + (cell_y - world_y) ** 2)
-                if distance <= detection_radius:
-                    visible_cells.add((r, c))
-        
-        return visible_cells
-
-    def calculate_position_score(row: int, col: int, observed_cells: set) -> float:
-        """Calculate the score for a position based on unobserved visible cells."""
-        visible_cells = get_visible_cells_from_grid_pos(row, col)
-        new_cells = visible_cells - observed_cells
-        return sum(probability_map[r, c] for r, c in new_cells)
-
     # Convert the real-world starting coordinates to grid indices
     start_col = np.clip(int((center_x - minx) / dx), 0, width - 1)
     start_row = np.clip(int((center_y - miny) / dy), 0, height - 1)
     start_pos = (start_row, start_col)
-
-    # Pre-compute squared max radius for faster distance checks
-    max_radius_sq = max_radius * max_radius
 
     # Track globally observed cells across all drones
     globally_observed_cells = set()
@@ -170,11 +380,15 @@ def generate_greedy_path(center_x: float, center_y: float, num_drones: int, prob
     for i, pos in enumerate(current_positions):
         paths[i].append(pos)
         # Add visible cells from initial positions to globally observed
-        visible_cells = get_visible_cells_from_grid_pos(pos[0], pos[1])
+        visible_cells = greedy_visible_cells(
+            pos[0],
+            pos[1],
+            map_shape=probability_map.shape,
+            bounds=bounds,
+            detection_radius_m=detection_radius,
+        )
         globally_observed_cells.update(visible_cells)
 
-    # Pre-define neighbor offsets (8-connected)
-    neighbor_offsets = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
     max_iterations = height * width // num_drones
     
     # Estimate max_iterations based on budget (in meters) and minimum move length
@@ -187,42 +401,34 @@ def generate_greedy_path(center_x: float, center_y: float, num_drones: int, prob
     while iteration < max_iterations:
         iteration += 1
         for i in range(num_drones):
-            current_r, current_c = current_positions[i]
-            valid_neighbors = []
-
-            # Check all 8 neighbors
-            for dr, dc in neighbor_offsets:
-                nr, nc = current_r + dr, current_c + dc
-                # Bounds check
-                if nr < 0 or nr >= height or nc < 0 or nc >= width:
-                    continue
-                
-                # Distance check using squared distance
-                world_x = x_offset + nc * dx
-                world_y = y_offset + nr * dy
-                dist_sq = (world_x - center_x) ** 2 + (world_y - center_y) ** 2
-                if dist_sq >= max_radius_sq:
-                    continue
-
-                # Calculate score based on unobserved cells visible from this position
-                score = calculate_position_score(nr, nc, globally_observed_cells)
-                valid_neighbors.append(((nr, nc), score))
+            valid_neighbors = score_greedy_neighbours(
+                current_positions[i],
+                globally_observed_cells,
+                probability_map=probability_map,
+                bounds=bounds,
+                search_center=(center_x, center_y),
+                max_radius=max_radius,
+                detection_radius_m=detection_radius,
+            )
 
             # Choose next position based on scores
             if valid_neighbors:
-                # Select the neighbor with the maximum score
-                best_neighbor, max_prob = max(valid_neighbors, key=lambda x: x[1])
-                
-                if max_prob <= 0:
-                    # Randomly choose from all valid neighbors when max score is 0 or below
-                    best_neighbor = rng.choice(len(valid_neighbors))
-                    best_neighbor = valid_neighbors[best_neighbor][0]
+                best_neighbor = select_original_greedy_candidate(
+                    valid_neighbors,
+                    rng,
+                )
                 current_positions[i] = best_neighbor
                 
                 paths[i].append(best_neighbor)
                 
                 # Update globally observed cells with newly visible cells
-                visible_cells = get_visible_cells_from_grid_pos(best_neighbor[0], best_neighbor[1])
+                visible_cells = greedy_visible_cells(
+                    best_neighbor[0],
+                    best_neighbor[1],
+                    map_shape=probability_map.shape,
+                    bounds=bounds,
+                    detection_radius_m=detection_radius,
+                )
                 globally_observed_cells.update(visible_cells)
 
     # Convert grid paths back to real-world coordinate paths

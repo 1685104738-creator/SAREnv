@@ -1,4 +1,4 @@
-"""Ordered Zoned Polygon nominal surface source."""
+"""Ordered Zoned Polygon surface activity-density source."""
 
 from __future__ import annotations
 
@@ -9,8 +9,7 @@ from shapely.geometry import mapping
 from shapely.ops import unary_union
 
 from ..common.grid import GridSpec
-from ..common.metadata import NOMINAL_SURFACE_UNIT
-from .config import ZonedPolygonConfig
+from .config import SURFACE_ACTIVITY_DENSITY_UNIT, ZonedPolygonConfig
 from .grid import rasterize_polygon_mask, validate_geometry_grid_crs
 
 
@@ -34,12 +33,12 @@ class ZonedPolygonSource:
         return "zoned_polygon"
 
     def rasterize(self, grid: GridSpec) -> np.ndarray:
-        """Return a 1 m nominal field using last-defined-zone-wins overlap."""
+        """Return activity density [Bq/m^2] using last-defined-zone-wins."""
         validate_geometry_grid_crs(self.config.crs, grid)
-        field = np.zeros(grid.shape, dtype=float)
+        field = np.zeros(grid.shape, dtype=np.float64)
         for zone in self.config.zones:
             mask = rasterize_polygon_mask(zone.geometry, grid)
-            field[mask] = zone.nominal_surface_field_uSv_h
+            field[mask] = zone.activity_density_bq_m2
         return field
 
     def source_metadata(self) -> dict[str, object]:
@@ -48,9 +47,7 @@ class ZonedPolygonSource:
             {
                 "order": index,
                 "zone_id": zone.zone_id,
-                "nominal_surface_field_uSv_h": (
-                    zone.nominal_surface_field_uSv_h
-                ),
+                "activity_density_bq_m2": zone.activity_density_bq_m2,
                 "geometry": mapping(zone.geometry),
             }
             for index, zone in enumerate(self.config.zones)
@@ -59,7 +56,8 @@ class ZonedPolygonSource:
             "source_id": self.config.source_id,
             "surface_type": self.surface_type,
             "crs": self.config.crs,
-            "nominal_intensity_unit": NOMINAL_SURFACE_UNIT,
+            "quantity": "surface_activity_density",
+            "activity_density_unit": SURFACE_ACTIVITY_DENSITY_UNIT,
             "zone_definitions": zones,
             "overlap_rule": self.config.overlap_rule,
         }

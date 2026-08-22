@@ -1,4 +1,4 @@
-"""Normalised inverse-square-inspired benchmark surface response kernel."""
+"""Physical gamma photon-response kernel for planar surface sources."""
 
 from __future__ import annotations
 
@@ -6,78 +6,131 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .config import BenchmarkSurfaceResponseConfig
+from ..common.grid import GridSpec
+from .config import (
+    AIR_DENSITY_KG_M3,
+    MASS_ATTENUATION_COEFF_AIR_M2_KG,
+    PHOTON_KERNEL_UNIT,
+    RASTER_RESOLUTION_M,
+    SURFACE_PHOTON_KERNEL_MODEL_NAME,
+    SurfacePhotonResponseConfig,
+)
 
 
 @dataclass(frozen=True)
-class BenchmarkSurfaceResponseKernel:
-    """Deterministic benchmark kernel; not a physical dose-response model."""
+class SurfacePhotonResponseKernel:
+    """Per-Bq gamma response over all relative offsets in one source grid."""
 
-    config: BenchmarkSurfaceResponseConfig
+    config: SurfacePhotonResponseConfig
     values: np.ndarray
+    grid: GridSpec
 
     def __post_init__(self) -> None:
-        array = np.asarray(self.values, dtype=float)
+        array = np.asarray(self.values, dtype=np.float64)
         object.__setattr__(self, "values", array)
-        if array.ndim != 2 or array.shape[0] != array.shape[1]:
-            raise ValueError("Surface response kernel must be a square 2D array.")
-        if array.shape[0] % 2 != 1:
-            raise ValueError("Surface response kernel shape must be odd.")
+
+        if array.ndim != 2:
+            raise ValueError("Surface photon-response kernel must be a 2D array.")
+        if not isinstance(self.grid, GridSpec):
+            raise TypeError("grid must be a GridSpec.")
+        source_height, source_width = self.grid.shape
+        expected_shape = (2 * source_height - 1, 2 * source_width - 1)
+        if array.shape != expected_shape:
+            raise ValueError(
+                "Kernel shape must cover every relative offset in the source grid."
+            )
         if not np.isfinite(array).all() or (array < 0).any():
-            raise ValueError("Surface response kernel must be finite/non-negative.")
-        if not np.isclose(array.sum(), 1.0, atol=1e-12):
-            raise ValueError("Normalised surface response kernel must sum to one.")
+            raise ValueError(
+                "Surface photon-response kernel must be finite and non-negative."
+            )
 
     @classmethod
     def create(
-        cls, config: BenchmarkSurfaceResponseConfig
-    ) -> "BenchmarkSurfaceResponseKernel":
-        """Build ``K(r)=1/(r^2+r0^2)`` with circular cutoff and unit sum."""
-        radius_cells = int(round(config.cutoff_radius_m / config.resolution_m))
-        offsets = np.arange(-radius_cells, radius_cells + 1, dtype=float)
-        x_offsets, y_offsets = np.meshgrid(offsets, offsets)
-        radius_squared = (
-            (x_offsets * config.resolution_m) ** 2
-            + (y_offsets * config.resolution_m) ** 2
+        cls,
+        config: SurfacePhotonResponseConfig,
+        grid: GridSpec,
+    ) -> "SurfacePhotonResponseKernel":
+        """Build the full-domain per-Bq primary gamma photon kernel."""
+        if not isinstance(config, SurfacePhotonResponseConfig):
+            raise TypeError("config must be a SurfacePhotonResponseConfig.")
+        if not isinstance(grid, GridSpec):
+            raise TypeError("grid must be a GridSpec.")
+        if grid.resolution_m != RASTER_RESOLUTION_M:
+            raise ValueError("The Cs-137 surface raster resolution is fixed at 1.0 m.")
+
+        row_offsets = np.arange(
+            -(grid.height - 1),
+            grid.height,
+            dtype=np.float64,
         )
-        cutoff_squared = config.cutoff_radius_m**2
-        values = np.where(
-            radius_squared <= cutoff_squared + 1e-12,
-            1.0 / (radius_squared + config.core_radius_m**2),
-            0.0,
+        column_offsets = np.arange(
+            -(grid.width - 1),
+            grid.width,
+            dtype=np.float64,
         )
-        kernel_sum = float(values.sum())
-        if not np.isfinite(kernel_sum) or kernel_sum <= 0:
-            raise ValueError("Surface response kernel has invalid total weight.")
-        values /= kernel_sum
-        return cls(config=config, values=values)
+        dx_m, dy_m = np.meshgrid(
+            column_offsets * grid.resolution_m,
+            row_offsets * grid.resolution_m,
+        )
+        distance_m = np.sqrt(
+            dx_m**2
+            + dy_m**2
+            + config.observation_height_m**2
+        )
+        values = (
+            config.gamma_yield_per_decay
+            * np.exp(-config.mu_air_m_inv * distance_m)
+            / (4.0 * np.pi * distance_m**2)
+        )
+        return cls(
+            config=config,
+            values=np.asarray(values, dtype=np.float64),
+            grid=grid,
+        )
 
     @property
     def center_index(self) -> tuple[int, int]:
-        """Return the central row/column index."""
-        center = self.values.shape[0] // 2
-        return center, center
-
-    @property
-    def radius_cells(self) -> int:
-        return self.values.shape[0] // 2
+        """Return the zero-horizontal-offset row/column index."""
+        return self.grid.height - 1, self.grid.width - 1
 
     def to_metadata(self) -> dict[str, object]:
-        """Return the explicit benchmark-kernel definition."""
+        """Return the physical kernel definition and units."""
         return {
             "kernel_class": type(self).__name__,
-            "kernel_model": self.config.model_name,
-            "kernel_formula": "K(r)=1/(r^2+core_radius_m^2)",
-            "core_radius_m": self.config.core_radius_m,
-            "cutoff_radius_m": self.config.cutoff_radius_m,
-            "resolution_m": self.config.resolution_m,
-            "normalise_kernel": self.config.normalise_kernel,
+            "kernel_model": SURFACE_PHOTON_KERNEL_MODEL_NAME,
+            "kernel_formula": (
+                "gamma_yield_per_decay * exp(-mu_air_m_inv * R) / "
+                "(4*pi*R^2)"
+            ),
+            "distance_formula": "R=sqrt(dx^2+dy^2+observation_height_m^2)",
+            "kernel_unit": PHOTON_KERNEL_UNIT,
+            "radionuclide_name": self.config.radionuclide_profile.name,
+            "half_life_years": self.config.radionuclide_profile.half_life_years,
+            "half_life_usage": "metadata_only_static_simulation",
+            "gamma_energy_mev": self.config.gamma_energy_mev,
+            "observation_height_m": self.config.observation_height_m,
+            "gamma_yield_per_decay": self.config.gamma_yield_per_decay,
+            "air_density_kg_m3": AIR_DENSITY_KG_M3,
+            "mass_attenuation_coeff_air_m2_kg": (
+                MASS_ATTENUATION_COEFF_AIR_M2_KG
+            ),
+            "mu_air_m_inv": self.config.mu_air_m_inv,
+            "resolution_m": self.grid.resolution_m,
             "kernel_shape": list(self.values.shape),
             "kernel_center_index": list(self.center_index),
-            "kernel_sum": float(self.values.sum()),
-            "kernel_cutoff_geometry": "circular",
-            "physical_model": False,
+            "kernel_support": "complete_relative_offsets_of_current_grid",
+            "kernel_cutoff": None,
+            "normalised": False,
+            "physical_model": True,
         }
 
 
-__all__ = ["BenchmarkSurfaceResponseKernel"]
+# Backward import alias only. The implementation is now physical and has no
+# core radius, cutoff, smoothing, or normalisation behaviour.
+BenchmarkSurfaceResponseKernel = SurfacePhotonResponseKernel
+
+
+__all__ = [
+    "BenchmarkSurfaceResponseKernel",
+    "SurfacePhotonResponseKernel",
+]

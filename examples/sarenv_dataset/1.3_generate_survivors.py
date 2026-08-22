@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from sarenv import (
     DatasetLoader,
     LostPersonLocationGenerator,
     get_logger,
+    load_lost_person_locations,
+    save_lost_person_locations,
 )
 
 log = get_logger()
@@ -9,18 +13,18 @@ log = get_logger()
 if __name__ == "__main__":
     log.info("--- Starting lost_person Location Generation Example for Custom Area ---")
 
-    dataset_dir = "sarenv_outputs/test_area_01"
-    size_to_load = "xlarge"
+    example_directory = Path(__file__).resolve().parent
+    dataset_dir = example_directory / "sarenv_outputs" / "radiation_area_01"
     num_locations = 100
 
     try:
-        # 1. Load the custom dataset for a specific size
-        log.info(f"Loading data for size: '{size_to_load}'")
-        loader = DatasetLoader(dataset_directory=dataset_dir)
-        dataset_item = loader.load_environment(size_to_load)
+        # The saved metadata is authoritative for the physical dataset size.
+        loader = DatasetLoader(dataset_directory=str(dataset_dir))
+        dataset_item = loader.load_environment()
 
         if not dataset_item:
-            log.error(f"Could not load the dataset for size '{size_to_load}'.")
+            raise RuntimeError("Could not load the saved SAR dataset.")
+        log.info(f"Loaded saved environment size: '{dataset_item.size}'")
 
         # 2. Initialize the lost_person location generator with the loaded data
         log.info("Initializing the lost_person LocationGenerator.")
@@ -34,6 +38,15 @@ if __name__ == "__main__":
             log.error("No lost_person locations were generated.")
         else:
             log.info(f"Successfully generated {len(locations)} lost_person locations.")
+            output_path = save_lost_person_locations(
+                locations,
+                dataset_item,
+                dataset_dir,
+            )
+            restored = load_lost_person_locations(output_path)
+            if len(restored.points) != len(locations):
+                raise ValueError("Lost-person save/load count mismatch.")
+            log.info(f"Saved and reloaded locations: {output_path}")
 
     except FileNotFoundError:
         log.error(
