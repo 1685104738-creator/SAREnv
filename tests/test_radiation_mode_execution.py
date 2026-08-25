@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString
 
-from sarenv.analytics.radiation_priority import RadiationGreedyStepPlanner
+from sarenv.analytics.radiation_priority import (
+    RadiationGreedyStepPlanner,
+    RadiationPriorityGreedyPolicy,
+    SarReferenceScore,
+)
 from sarenv.analytics.route_execution import (
     ExecutedNodeRadiationObserver,
     ExecutedSARState,
@@ -17,6 +21,7 @@ from sarenv.radiation.online.sensor import NoiseFreeRadiationSensor
 from sarenv.radiation.online.trigger import (
     AboveBackgroundCriterion,
     ConsecutiveRadiationTrigger,
+    HysteresisRadiationTrigger,
 )
 
 
@@ -26,7 +31,7 @@ QUANTITY = "test_radiation_rate"
 UNIT = "test_unit"
 
 
-def _pipeline(probability_map):
+def _pipeline(probability_map, *, truth_query=None, trigger=None):
     state = ExecutedSARState(
         map_shape=probability_map.shape,
         bounds=BOUNDS,
@@ -48,6 +53,8 @@ def _pipeline(probability_map):
 
     def test_only_truth(x_m, y_m, altitude_m):
         queried_positions.append((x_m, y_m, altitude_m))
+        if truth_query is not None:
+            return truth_query(x_m, y_m, altitude_m)
         return x_m / 30.0
 
     sensor = NoiseFreeRadiationSensor(
@@ -60,7 +67,7 @@ def _pipeline(probability_map):
         quantity=QUANTITY,
         unit=UNIT,
     )
-    trigger = ConsecutiveRadiationTrigger(
+    trigger = trigger or ConsecutiveRadiationTrigger(
         AboveBackgroundCriterion(0.0, quantity=QUANTITY, unit=UNIT)
     )
     observer = ExecutedNodeRadiationObserver(sensor, estimator, trigger)
@@ -125,9 +132,18 @@ def test_core_flow_interrupts_normal_route_then_executes_one_radiation_step():
     ]
 
 
-def test_no_gate_eligible_candidate_requests_normal_replan_without_moving():
+def test_low_sar_candidates_take_original_greedy_step_inside_radiation_mode():
     probability_map = np.full((5, 5), 0.0009)
     state, normal_route, _, observer, planner = _pipeline(probability_map)
+    planner.sar_reference = SarReferenceScore(
+        score=0.01,
+        radius_fraction=0.5,
+        radius_m=100.0,
+        ring_cell_count=1,
+    )
+    planner.policy = RadiationPriorityGreedyPolicy(
+        sar_reference_score=planner.sar_reference.score,
+    )
     for test_only_time_s in (0.0, 1.0, 2.0):
         execute_normal_route_node_with_radiation(
             normal_route,
@@ -135,9 +151,6 @@ def test_no_gate_eligible_candidate_requests_normal_replan_without_moving():
             altitude_m=50.0,
             simulated_time_s=test_only_time_s,
         )
-    position_before = state.current_position_m
-    observed_before = state.observed_cells
-
     result = RadiationGreedyExecutionController(
         state,
         planner,
@@ -148,19 +161,29 @@ def test_no_gate_eligible_candidate_requests_normal_replan_without_moving():
         simulated_time_s=3.0,
     )
 
-    assert result.selected_candidate is None
-    assert result.route_execution is None
-    assert result.radiation_observation is None
-    assert result.normal_route_replan.current_position_m == position_before
-    assert result.normal_route_replan.observed_cells == observed_before
-    assert state.current_position_m == position_before
-    assert state.observed_cells == observed_before
+    assert result.selected_candidate is not None
+    assert result.route_execution is not None
+    assert result.radiation_observation is not None
+    assert result.normal_route_replan is None
+    assert result.plan.decision.planner_mode == "original_greedy"
+    assert result.plan.decision.reason.endswith("_original_greedy_step")
 
 
-def test_normal_radiation_normal_cycle_shares_budget_and_rearms_trigger():
+def test_hysteresis_exit_step_replans_normal_and_rearms_trigger():
     probability_map = np.full((5, 5), 0.0009)
     probability_map[2, 3] = 0.02
-    state, old_normal_route, _, observer, planner = _pipeline(probability_map)
+    trigger = HysteresisRadiationTrigger(
+        enter_threshold=1.0,
+        hysteresis_margin=0.10,
+        confirmation_samples=1,
+        quantity=QUANTITY,
+        unit=UNIT,
+    )
+    state, old_normal_route, _, observer, planner = _pipeline(
+        probability_map,
+        truth_query=lambda x_m, y_m, altitude_m: 2.0 if x_m == 75.0 else 0.5,
+        trigger=trigger,
+    )
 
     for test_only_time_s in (0.0, 1.0, 2.0):
         execute_normal_route_node_with_radiation(
@@ -179,17 +202,13 @@ def test_normal_radiation_normal_cycle_shares_budget_and_rearms_trigger():
         observer,
         initial_budget_m=300.0,  # TEST ONLY: not a production mission default.
     )
-    radiation_move = radiation_controller.execute_next(
+    radiation_exit = radiation_controller.execute_next(
         altitude_m=50.0,
         simulated_time_s=3.0,
     )
-    assert radiation_move.selected_candidate is not None
-    assert state.total_executed_distance_m == pytest.approx(90.0)
-
-    radiation_exit = radiation_controller.execute_next(
-        altitude_m=50.0,
-        simulated_time_s=4.0,
-    )
+    assert radiation_exit.selected_candidate is not None
+    assert radiation_exit.route_execution is not None
+    assert radiation_exit.radiation_observation.hazard_transition == "exit"
     assert radiation_exit.normal_route_replan is not None
     assert state.total_executed_distance_m == pytest.approx(90.0)
 
@@ -218,33 +237,6 @@ def test_normal_radiation_normal_cycle_shares_budget_and_rearms_trigger():
     assert observer.consecutive_anomaly_count == 0
     assert state.total_executed_distance_m == pytest.approx(90.0)
 
-    first_new_anomaly = execute_normal_route_node_with_radiation(
-        continuation.controller,
-        observer,
-        altitude_m=50.0,
-        simulated_time_s=5.0,
-    )
-    second_new_anomaly = execute_normal_route_node_with_radiation(
-        continuation.controller,
-        observer,
-        altitude_m=50.0,
-        simulated_time_s=6.0,
-    )
-
-    assert not first_new_anomaly.normal_route_interrupted
-    assert not second_new_anomaly.normal_route_interrupted
-    assert not observer.anomaly_confirmed
-    assert observer.consecutive_anomaly_count == 2
-
-    third_new_anomaly = execute_normal_route_node_with_radiation(
-        continuation.controller,
-        observer,
-        altitude_m=50.0,
-        simulated_time_s=7.0,
-    )
-
-    assert third_new_anomaly.normal_route_interrupted
-    assert observer.anomaly_confirmed
 
 
 def test_exhausted_global_budget_ends_radiation_mode_without_moving():

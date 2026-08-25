@@ -4,6 +4,7 @@ Generates plausible lost_person locations based on geographic features.
 """
 import random
 import geopandas as gpd
+import numpy as np
 from shapely.geometry import Point, Polygon
 
 from sarenv.core.loading import SARDatasetItem
@@ -15,9 +16,13 @@ class LostPersonLocationGenerator:
     """
     Generates plausible lost_person locations based on geographic features.
     """
-    def __init__(self, dataset_item: SARDatasetItem):
+    def __init__(self, dataset_item: SARDatasetItem, *, seed: int | None = None):
         self.dataset_item = dataset_item
         self.features = dataset_item.features.copy()
+        self._python_rng = random if seed is None else random.Random(seed)
+        self._pandas_random_state = (
+            None if seed is None else np.random.default_rng(seed)
+        )
         self.type_probabilities = {}
         self._calculate_weights()
 
@@ -33,7 +38,10 @@ class LostPersonLocationGenerator:
     def _generate_random_point_in_polygon(self, poly: Polygon) -> Point:
         min_x, min_y, max_x, max_y = poly.bounds
         while True:
-            random_point = Point(random.uniform(min_x, max_x), random.uniform(min_y, max_y))
+            random_point = Point(
+                self._python_rng.uniform(min_x, max_x),
+                self._python_rng.uniform(min_y, max_y),
+            )
             if poly.contains(random_point):
                 return random_point
 
@@ -61,18 +69,25 @@ class LostPersonLocationGenerator:
 
         while len(locations) < n:
             # Randomly choose a feature type based on the probabilities
-            if random.random() < percent_random_samples:  # 10% chance to choose a random type
-                chosen_feature = self.features.sample(n=1).iloc[0]
+            if self._python_rng.random() < percent_random_samples:  # 10% chance to choose a random type
+                chosen_feature = self.features.sample(
+                    n=1,
+                    random_state=self._pandas_random_state,
+                ).iloc[0]
                 feature_buffer = chosen_feature.geometry.buffer(15)
                 final_search_area = feature_buffer.intersection(main_search_circle)
             else:
-                chosen_type = random.choices(
+                chosen_type = self._python_rng.choices(
                     list(self.type_probabilities.keys()),
                     weights=list(self.type_probabilities.values()),
                     k=1
                 )[0]
                 type_gdf = self.features[self.features['feature_type'] == chosen_type]
-                chosen_feature = type_gdf.sample(n=1, weights='area_probability').iloc[0]
+                chosen_feature = type_gdf.sample(
+                    n=1,
+                    weights='area_probability',
+                    random_state=self._pandas_random_state,
+                ).iloc[0]
                 feature_buffer = chosen_feature.geometry.buffer(15)
                 final_search_area = feature_buffer.intersection(main_search_circle)
 

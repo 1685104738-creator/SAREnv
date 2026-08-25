@@ -71,3 +71,28 @@ def test_neighbour_scoring_returns_only_eight_connected_cells():
         (3, 2),
         (3, 3),
     }
+
+
+def test_greedy_route_is_reproducible_with_an_injected_rng():
+    probability_map = np.zeros((5, 5), dtype=float)
+    kwargs = {
+        "center_x": 75.0,
+        "center_y": 75.0,
+        "num_drones": 1,
+        "probability_map": probability_map,
+        "bounds": (0.0, 0.0, 150.0, 150.0),
+        "max_radius": 200.0,
+        "fov_deg": 0.0,
+        "altitude": 50.0,
+    }
+
+    first = generate_greedy_path(
+        **kwargs,
+        rng=np.random.default_rng(42),
+    )[0]
+    second = generate_greedy_path(
+        **kwargs,
+        rng=np.random.default_rng(42),
+    )[0]
+
+    assert list(first.coords) == list(second.coords)

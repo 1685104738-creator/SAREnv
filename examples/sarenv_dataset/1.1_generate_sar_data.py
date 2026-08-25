@@ -15,9 +15,10 @@ log = get_logger()
 
 EXAMPLE_DIRECTORY = Path(__file__).resolve().parent
 OUTPUT_DIRECTORY = (
-    EXAMPLE_DIRECTORY / "sarenv_outputs" / "radiation_area_01"
+    EXAMPLE_DIRECTORY / "sarenv_outputs" / "radiation_area_01_small_20m"
 )
 TARGET_SIZE = "small"
+SAR_RESOLUTION_M = 20
 
 
 def run_base_dataset_export_example():
@@ -34,7 +35,7 @@ def run_base_dataset_export_example():
         output_directory=str(OUTPUT_DIRECTORY),
         environment_climate=CLIMATE_TEMPERATE,
         environment_type=ENVIRONMENT_TYPE_FLAT,
-        meter_per_bin=30,
+        meter_per_bin=SAR_RESOLUTION_M,
         target_size=TARGET_SIZE,
     )
 
@@ -54,6 +55,19 @@ def run_base_dataset_export_example():
         raise ValueError(
             "Base metadata raster shape does not match heatmap.npy."
         )
+    if metadata["environment_size"] != TARGET_SIZE:
+        raise ValueError("Base metadata does not describe a Small environment.")
+    if not np.isclose(metadata["meter_per_bin"], SAR_RESOLUTION_M):
+        raise ValueError("Base metadata does not use the formal 20 m SAR resolution.")
+    minx, miny, maxx, maxy = metadata["bounds_projected"]
+    expected_shape = (
+        int(round((maxy - miny) / SAR_RESOLUTION_M)),
+        int(round((maxx - minx) / SAR_RESOLUTION_M)),
+    )
+    if heatmap.shape != expected_shape:
+        raise ValueError("Base bounds, resolution, and heatmap shape disagree.")
+    if not np.isclose(heatmap.sum(), 1.0, atol=1e-6):
+        raise ValueError("Direct-Small probability heatmap must sum to one.")
 
     log.info("--- Base SAREnv dataset exported successfully ---")
     log.info(f"Output directory: {OUTPUT_DIRECTORY}")

@@ -4,20 +4,22 @@ import numpy as np
 import pytest
 
 from sarenv.analytics.radiation_priority import (
-    GreedyCandidate,
     RadiationPriorityGreedyPolicy,
-    SAR_PROBABILITY_GATE,
+    derive_sar_reference_score,
     estimate_candidate_radiation,
     greedy_candidate_from_grid,
 )
 from sarenv.radiation.common.grid import GridSpec
 from sarenv.radiation.online.estimator import IncrementalRadiationGrid
-from sarenv.radiation.online.measurement import RadiationEstimate, RadiationMeasurement
+from sarenv.radiation.online.measurement import (
+    RadiationMeasurement,
+    RadiationRegionEstimate,
+)
 
 
 CRS = "EPSG:32630"
-QUANTITY = "synthetic_radiation_rate"
-UNIT = "benchmark_unit"
+QUANTITY = "synthetic_excess_gamma_dose_rate"
+UNIT = "uSv/h"
 
 
 class StubEstimator:
@@ -25,14 +27,17 @@ class StubEstimator:
         self.values_by_position = values_by_position
         self.queries = []
 
-    def estimate_at(self, x_m, y_m):
+    def max_estimate_in_bounds(self, bounds):
+        x_m = (bounds[0] + bounds[2]) / 2.0
+        y_m = (bounds[1] + bounds[3]) / 2.0
         self.queries.append((x_m, y_m))
-        value = self.values_by_position.get((x_m, y_m))
-        return RadiationEstimate(
-            x_m=x_m,
-            y_m=y_m,
+        value, supported = self.values_by_position.get((x_m, y_m), (0.0, False))
+        return RadiationRegionEstimate(
+            bounds=bounds,
             value=value,
-            weight_sum=0.0 if value is None else 1.0,
+            max_weight_sum=1.0 if supported else 0.0,
+            supported_cell_count=1 if supported else 0,
+            total_cell_count=1,
             quantity=QUANTITY,
             unit=UNIT,
         )
@@ -42,11 +47,22 @@ def _measurement(x_m: float, y_m: float, value: float = 8.0):
     return RadiationMeasurement(
         x_m=x_m,
         y_m=y_m,
-        altitude_m=50.0,
+        platform_altitude_m=50.0,
+        value_reference_height_m=1.0,
         simulated_time_s=0.0,
         value=value,
         quantity=QUANTITY,
         unit=UNIT,
+    )
+
+
+def _candidate(col: int, sar_score: float):
+    return greedy_candidate_from_grid(
+        0,
+        col,
+        sar_score,
+        bounds=(0.0, 0.0, 3.0, 1.0),
+        map_shape=(1, 3),
     )
 
 
@@ -76,192 +92,147 @@ def test_candidate_accepts_numpy_integer_indices_used_by_original_greedy():
     assert type(candidate.col) is int
 
 
-def test_approved_roi_supports_immediate_30_m_greedy_neighbours():
-    grid = GridSpec.from_bounds((0.0, 0.0, 120.0, 120.0), CRS)
+def test_candidate_radiation_is_max_over_full_sar_cell():
+    bounds = (0.0, 0.0, 60.0, 60.0)
     estimator = IncrementalRadiationGrid(
-        grid,
+        GridSpec.from_bounds(bounds, CRS),
         quantity=QUANTITY,
         unit=UNIT,
+        update_radius_m=0.49,
+        kernel_sigma_m=0.2,
     )
-    estimator.update(_measurement(45.0, 45.0))
-
-    orthogonal = greedy_candidate_from_grid(
+    estimator.update(_measurement(25.5, 25.5, 8.0))
+    candidate = greedy_candidate_from_grid(
         1,
-        2,
+        1,
         0.2,
-        bounds=(0.0, 0.0, 90.0, 90.0),
-        map_shape=(3, 3),
-    )
-    diagonal = greedy_candidate_from_grid(
-        2,
-        2,
-        0.1,
-        bounds=(0.0, 0.0, 90.0, 90.0),
+        bounds=bounds,
         map_shape=(3, 3),
     )
 
-    assert math.dist((45.0, 45.0), (orthogonal.x_m, orthogonal.y_m)) == 30.0
-    assert math.dist((45.0, 45.0), (diagonal.x_m, diagonal.y_m)) == pytest.approx(
-        math.sqrt(2.0) * 30.0
+    estimate = estimate_candidate_radiation(
+        candidate,
+        estimator,
+        bounds=bounds,
+        map_shape=(3, 3),
     )
-    assert estimate_candidate_radiation(orthogonal, estimator).observed
-    assert estimate_candidate_radiation(diagonal, estimator).observed
-    assert estimate_candidate_radiation(orthogonal, estimator).value == 8.0
-    assert estimate_candidate_radiation(diagonal, estimator).value == 8.0
+
+    assert estimate.value == 8.0
+    assert estimate.total_cell_count == 400
+    assert estimate.supported_cell_count == 1
 
 
-def test_candidate_outside_local_support_remains_explicitly_unknown():
-    grid = GridSpec.from_bounds((0.0, 0.0, 150.0, 150.0), CRS)
+def test_unsupported_candidate_is_numeric_zero_not_unknown():
+    bounds = (0.0, 0.0, 60.0, 60.0)
     estimator = IncrementalRadiationGrid(
-        grid,
+        GridSpec.from_bounds(bounds, CRS),
         quantity=QUANTITY,
         unit=UNIT,
     )
-    estimator.update(_measurement(45.0, 45.0))
-    unsupported = greedy_candidate_from_grid(
+    candidate = greedy_candidate_from_grid(
         1,
-        3,
-        0.1,
-        bounds=(0.0, 0.0, 150.0, 90.0),
-        map_shape=(3, 5),
+        1,
+        0.2,
+        bounds=bounds,
+        map_shape=(3, 3),
     )
 
-    estimate = estimate_candidate_radiation(unsupported, estimator)
+    estimate = estimate_candidate_radiation(
+        candidate,
+        estimator,
+        bounds=bounds,
+        map_shape=(3, 3),
+    )
 
-    assert unsupported.x_m == 105.0
-    assert estimate.value is None
+    assert estimate.value == 0.0
     assert not estimate.observed
 
 
-def test_multiple_spatial_measurements_create_local_directional_ordering():
-    bounds = (0.0, 0.0, 150.0, 150.0)
-    grid = GridSpec.from_bounds(bounds, CRS)
-    estimator = IncrementalRadiationGrid(
-        grid,
-        quantity=QUANTITY,
-        unit=UNIT,
-    )
-    estimator.update(_measurement(15.0, 75.0, value=1.0))
-    estimator.update(_measurement(45.0, 75.0, value=2.0))
-    estimator.update(_measurement(75.0, 75.0, value=3.0))
+def test_reference_score_uses_native_visible_probability_on_half_radius_ring():
+    probability_map = np.full((6, 6), 1.0 / 36.0)
 
-    candidates = [
-        greedy_candidate_from_grid(
-            row,
-            col,
-            0.1,
-            bounds=bounds,
-            map_shape=(5, 5),
-        )
-        for row in (1, 2, 3)
-        for col in (1, 2, 3)
-        if (row, col) != (2, 2)
-    ]
-    estimates = {
-        (candidate.row, candidate.col): estimate_candidate_radiation(
-            candidate, estimator
-        )
-        for candidate in candidates
-    }
-
-    assert all(estimate.observed for estimate in estimates.values())
-    for row in (1, 2, 3):
-        assert estimates[(row, 3)].value > estimates[(row, 1)].value
-
-
-def _candidate(col: int, sar_score: float) -> GreedyCandidate:
-    return GreedyCandidate(
-        row=0,
-        col=col,
-        x_m=float(col),
-        y_m=0.0,
-        sar_score=sar_score,
+    reference = derive_sar_reference_score(
+        probability_map=probability_map,
+        bounds=(0.0, 0.0, 120.0, 120.0),
+        search_center=(60.0, 60.0),
+        max_radius=60.0,
+        detection_radius_m=20.71,
+        reference_radius_fraction=0.5,
     )
 
-
-def test_policy_falls_back_without_confirmed_radiation_evidence():
-    policy = RadiationPriorityGreedyPolicy()
-    estimator = StubEstimator({})
-
-    decision = policy.select(
-        [_candidate(0, 0.5)],
-        estimator,
-        radiation_priority_enabled=False,
-    )
-
-    assert SAR_PROBABILITY_GATE == 0.001
-    assert decision.fallback_to_original
-    assert decision.reason == "radiation_not_confirmed"
-    assert estimator.queries == []
+    assert reference.radius_m == 30.0
+    assert reference.ring_cell_count > 0
+    assert reference.score == pytest.approx(5.0 / 36.0)
+    assert reference.method == "minimum_native_visible_probability_on_reference_ring"
 
 
-def test_policy_applies_sar_gate_then_radiation_then_sar_tie_break():
-    below_gate = _candidate(0, 0.0009)
+def test_policy_uses_sar_reference_then_radiation_equivalent_priority():
+    below_reference = _candidate(0, 0.09)
     lower_radiation = _candidate(1, 0.4)
-    higher_radiation_lower_sar = _candidate(2, 0.1)
+    higher_radiation = _candidate(2, 0.2)
     estimator = StubEstimator(
         {
-            (below_gate.x_m, below_gate.y_m): 100.0,
-            (lower_radiation.x_m, lower_radiation.y_m): 2.0,
-            (higher_radiation_lower_sar.x_m, higher_radiation_lower_sar.y_m): 3.0,
+            (0.5, 0.5): (100.0, False),
+            (1.5, 0.5): (2.0, True),
+            (2.5, 0.5): (3.0, True),
         }
     )
+    policy = RadiationPriorityGreedyPolicy(
+        sar_reference_score=0.1,
+        hazard_reference_excess=2.0,
+    )
 
-    decision = RadiationPriorityGreedyPolicy().select(
-        [below_gate, lower_radiation, higher_radiation_lower_sar],
+    decision = policy.select(
+        [below_reference, lower_radiation, higher_radiation],
         estimator,
         radiation_priority_enabled=True,
+        bounds=(0.0, 0.0, 3.0, 1.0),
+        map_shape=(1, 3),
     )
 
-    assert not decision.fallback_to_original
-    assert decision.selected_candidate is higher_radiation_lower_sar
-    assert decision.radiation_estimate.value == 3.0
-    assert (below_gate.x_m, below_gate.y_m) not in estimator.queries
-
-    equal_radiation = StubEstimator(
-        {
-            (lower_radiation.x_m, lower_radiation.y_m): 3.0,
-            (higher_radiation_lower_sar.x_m, higher_radiation_lower_sar.y_m): 3.0,
-        }
-    )
-    tie_decision = RadiationPriorityGreedyPolicy().select(
-        [lower_radiation, higher_radiation_lower_sar],
-        equal_radiation,
-        radiation_priority_enabled=True,
-    )
-    assert tie_decision.selected_candidate is lower_radiation
+    assert decision.selected_candidate is higher_radiation
+    selected = next(item for item in decision.assessments if item.chosen)
+    assert selected.radiation_estimate.value == 3.0
+    assert selected.radiation_equivalent_priority == pytest.approx(0.15)
+    assert not decision.assessments[0].sar_relevant
 
 
-def test_policy_falls_back_when_all_or_part_of_eligible_estimates_are_unknown():
+def test_policy_numeric_zero_estimates_do_not_force_unknown_fallback():
     first = _candidate(1, 0.4)
     second = _candidate(2, 0.3)
-    policy = RadiationPriorityGreedyPolicy()
+    policy = RadiationPriorityGreedyPolicy(
+        sar_reference_score=0.1,
+        hazard_reference_excess=2.0,
+    )
 
-    all_unknown = policy.select(
+    decision = policy.select(
         [first, second],
         StubEstimator({}),
         radiation_priority_enabled=True,
-    )
-    partial = policy.select(
-        [first, second],
-        StubEstimator({(first.x_m, first.y_m): 2.0}),
-        radiation_priority_enabled=True,
+        bounds=(0.0, 0.0, 3.0, 1.0),
+        map_shape=(1, 3),
     )
 
-    assert all_unknown.fallback_to_original
-    assert all_unknown.reason == "no_usable_radiation_estimate"
-    assert partial.fallback_to_original
-    assert partial.reason == "partial_radiation_estimates"
+    assert not decision.fallback_to_original
+    assert decision.selected_candidate is first
+    assert decision.radiation_estimate.value == 0.0
 
 
 def test_policy_never_creates_a_candidate_outside_its_input():
     candidates = [_candidate(1, 0.4), _candidate(2, 0.3)]
-    estimator = StubEstimator({(1.0, 0.0): 2.0, (2.0, 0.0): 3.0})
+    estimator = StubEstimator({(1.5, 0.5): (2.0, True), (2.5, 0.5): (3.0, True)})
+    policy = RadiationPriorityGreedyPolicy(
+        sar_reference_score=0.1,
+        hazard_reference_excess=2.0,
+    )
 
-    decision = RadiationPriorityGreedyPolicy().select(
+    decision = policy.select(
         candidates,
         estimator,
         radiation_priority_enabled=True,
+        bounds=(0.0, 0.0, 3.0, 1.0),
+        map_shape=(1, 3),
     )
 
     assert any(decision.selected_candidate is candidate for candidate in candidates)
+    assert math.isfinite(decision.radiation_estimate.value)

@@ -15,6 +15,7 @@ from sarenv.radiation.online.sensor import NoiseFreeRadiationSensor
 from sarenv.radiation.online.trigger import (
     AboveBackgroundCriterion,
     ConsecutiveRadiationTrigger,
+    HysteresisRadiationTrigger,
 )
 
 
@@ -27,7 +28,9 @@ def _controller(
     probability_map: np.ndarray,
     *,
     measurement_value: float,
-    initial_budget_m: float = 300.0,
+    initial_budget_m: float | None = 300.0,
+    mission_step_allowance: int | None = None,
+    hysteresis: bool = False,
 ) -> tuple[MissionModeController, ExecutedSARState]:
     state = ExecutedSARState(
         map_shape=probability_map.shape,
@@ -47,7 +50,11 @@ def _controller(
         state,
     )
     sensor = NoiseFreeRadiationSensor(
-        lambda x_m, y_m, altitude_m: measurement_value,
+        lambda x_m, y_m, altitude_m: (
+            measurement_value(x_m, y_m, altitude_m)
+            if callable(measurement_value)
+            else measurement_value
+        ),
         quantity=QUANTITY,
         unit=UNIT,
     )
@@ -56,8 +63,18 @@ def _controller(
         quantity=QUANTITY,
         unit=UNIT,
     )
-    trigger = ConsecutiveRadiationTrigger(
-        AboveBackgroundCriterion(1.0, quantity=QUANTITY, unit=UNIT)
+    trigger = (
+        HysteresisRadiationTrigger(
+            enter_threshold=1.0,
+            hysteresis_margin=0.10,
+            confirmation_samples=1,
+            quantity=QUANTITY,
+            unit=UNIT,
+        )
+        if hysteresis
+        else ConsecutiveRadiationTrigger(
+            AboveBackgroundCriterion(1.0, quantity=QUANTITY, unit=UNIT)
+        )
     )
     observer = ExecutedNodeRadiationObserver(sensor, estimator, trigger)
     planner = RadiationGreedyStepPlanner(
@@ -74,6 +91,7 @@ def _controller(
         observer=observer,
         radiation_planner=planner,
         initial_budget_m=initial_budget_m,
+        mission_step_allowance=mission_step_allowance,
         probability_map=probability_map,
         bounds=BOUNDS,
         search_center=(75.0, 75.0),
@@ -130,40 +148,30 @@ def test_radiation_executes_one_step_and_remains_radiation():
     assert state.current_position_m == (105.0, 75.0)
 
 
-def test_radiation_exit_replans_normal_and_later_retriggers():
+def test_hysteresis_exit_replans_normal_on_the_executed_exit_step():
     probability_map = np.full((5, 5), 0.0009)
     probability_map[2, 3] = 0.02
-    controller, state = _controller(probability_map, measurement_value=2.0)
+    controller, state = _controller(
+        probability_map,
+        measurement_value=(
+            lambda x_m, y_m, altitude_m: 2.0 if x_m == 75.0 else 0.5
+        ),
+        hysteresis=True,
+    )
     for _ in range(3):
         controller.advance(simulated_time_s=0.0)
 
-    radiation_move = controller.advance(simulated_time_s=0.0)
     radiation_exit = controller.advance(simulated_time_s=0.0)
 
-    assert radiation_move.mode_after is MissionMode.RADIATION
-    assert not radiation_exit.moved
+    assert radiation_exit.moved
+    assert radiation_exit.radiation_observation.hazard_transition == "exit"
     assert radiation_exit.normal_route_replanned
     assert radiation_exit.mode_after is MissionMode.NORMAL
     assert controller.remaining_budget_m == pytest.approx(210.0)
-
-    later = [controller.advance(simulated_time_s=0.0) for _ in range(3)]
-
-    assert [result.mode_after for result in later] == [
-        MissionMode.NORMAL,
-        MissionMode.NORMAL,
-        MissionMode.RADIATION,
-    ]
-    later_distance_m = sum(
-        result.route_execution.distance_from_previous_m for result in later
-    )
-    assert state.total_executed_distance_m == pytest.approx(
-        90.0 + later_distance_m
-    )
     assert controller.mode_history == (
         MissionMode.NORMAL,
         MissionMode.RADIATION,
         MissionMode.NORMAL,
-        MissionMode.RADIATION,
     )
 
 
@@ -207,3 +215,22 @@ def test_radiation_step_exhausting_budget_changes_directly_to_complete():
     assert result.mission_complete
     assert result.moved
     assert state.total_executed_distance_m == pytest.approx(90.0)
+
+
+def test_native_move_allowance_completes_without_a_distance_budget():
+    controller, state = _controller(
+        np.full((5, 5), 0.01),
+        measurement_value=0.5,
+        initial_budget_m=None,
+        mission_step_allowance=2,
+    )
+
+    results = [controller.advance(simulated_time_s=0.0) for _ in range(3)]
+
+    assert [result.moved for result in results] == [True, True, True]
+    assert state.executed_node_count == 3
+    assert state.executed_move_count == 2
+    assert controller.remaining_budget_m is None
+    assert controller.remaining_steps == 0
+    assert controller.is_complete
+    assert controller.completion_reason == "mission_limit_reached"

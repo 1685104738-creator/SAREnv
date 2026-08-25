@@ -3,7 +3,10 @@ import inspect
 import numpy as np
 
 from sarenv.analytics.paths import greedy_visible_cells
-from sarenv.analytics.radiation_priority import RadiationGreedyStepPlanner
+from sarenv.analytics.radiation_priority import (
+    RadiationGreedyStepPlanner,
+    SarReferenceScore,
+)
 from sarenv.radiation.common.grid import GridSpec
 from sarenv.radiation.online.estimator import IncrementalRadiationGrid
 from sarenv.radiation.online.measurement import RadiationMeasurement
@@ -79,7 +82,7 @@ def test_radiation_greedy_returns_exactly_one_existing_neighbour():
     assert observed == frozenset({(2, 2)})
 
 
-def test_radiation_step_falls_back_without_usable_estimator_support():
+def test_radiation_step_uses_numeric_zero_without_unknown_fallback():
     probability_map = np.full((5, 5), 0.01)
     estimator = IncrementalRadiationGrid(
         GridSpec.from_bounds(BOUNDS, CRS),
@@ -93,17 +96,35 @@ def test_radiation_step_falls_back_without_usable_estimator_support():
         radiation_priority_enabled=True,
     )
 
-    assert result.selected_candidate is None
-    assert result.normal_replan_required
-    assert result.decision.reason == "no_usable_radiation_estimate"
+    assert result.selected_candidate is not None
+    assert not result.normal_replan_required
+    assert result.decision.reason == "radiation_priority"
+    assert result.decision.radiation_estimate.value == 0.0
 
 
-def test_radiation_step_does_not_promote_candidates_below_sar_gate():
+def test_no_sar_relevant_candidate_takes_one_original_greedy_fallback_step():
     probability_map = np.full((5, 5), 0.0009)
     probability_map[2, 1] = 0.002
     estimator = _directional_estimator()
 
-    result = _planner(probability_map, estimator).plan_next(
+    planner = RadiationGreedyStepPlanner(
+        probability_map=probability_map,
+        bounds=BOUNDS,
+        search_center=(75.0, 75.0),
+        max_radius=200.0,
+        detection_radius_m=0.0,
+        estimator=estimator,
+        hazard_reference_excess=1.0,
+        sar_reference=SarReferenceScore(
+            score=0.01,
+            radius_fraction=0.5,
+            radius_m=100.0,
+            ring_cell_count=1,
+        ),
+        rng=np.random.default_rng(7),
+    )
+
+    result = planner.plan_next(
         (2, 2),
         {(2, 2)},
         radiation_priority_enabled=True,
@@ -112,6 +133,8 @@ def test_radiation_step_does_not_promote_candidates_below_sar_gate():
     assert result.selected_candidate is not None
     assert (result.selected_candidate.row, result.selected_candidate.col) == (2, 1)
     assert result.selected_candidate.sar_score == 0.002
+    assert result.decision.fallback_to_original
+    assert result.decision.reason.endswith("original_greedy_step")
 
 
 def test_step_planner_has_no_radiation_truth_parameter():

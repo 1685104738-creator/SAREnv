@@ -28,33 +28,37 @@ def test_measurement_requires_explicit_position_time_and_metadata() -> None:
     )
 
     assert measurement.altitude_m == 50.0
+    assert measurement.platform_altitude_m == 50.0
+    assert measurement.value_reference_height_m == 50.0
     assert measurement.simulated_time_s == 3.0
 
 
-def test_unknown_estimate_is_not_encoded_as_zero_radiation() -> None:
+def test_unsupported_estimate_is_numeric_zero_with_separate_support() -> None:
     estimate = RadiationEstimate(
         x_m=10.0,
         y_m=20.0,
-        value=None,
+        value=0.0,
         weight_sum=0.0,
         quantity="synthetic_excess_gamma_dose_rate",
         unit="uSv/h",
     )
 
     assert not estimate.observed
-    assert estimate.value is None
+    assert estimate.value == 0.0
 
 
-def test_known_estimate_requires_positive_support() -> None:
-    with pytest.raises(ValueError, match="positive weight_sum"):
-        RadiationEstimate(
-            x_m=10.0,
-            y_m=20.0,
-            value=0.0,
-            weight_sum=0.0,
-            quantity="synthetic_excess_gamma_dose_rate",
-            unit="uSv/h",
-        )
+def test_numeric_zero_does_not_claim_measurement_support() -> None:
+    estimate = RadiationEstimate(
+        x_m=10.0,
+        y_m=20.0,
+        value=0.0,
+        weight_sum=0.0,
+        quantity="synthetic_excess_gamma_dose_rate",
+        unit="uSv/h",
+    )
+
+    assert estimate.value == 0.0
+    assert not estimate.observed
 
 
 def test_noise_free_sensor_queries_point_truth_at_explicit_altitude() -> None:
@@ -86,6 +90,34 @@ def test_noise_free_sensor_queries_point_truth_at_explicit_altitude() -> None:
     )
     assert measurement.unit == "uSv/h"
     assert measurement.simulated_time_s == 12.5
+
+
+def test_perfect_altitude_correction_returns_one_metre_excess_measurement() -> None:
+    queried_heights = []
+
+    def total_truth(x_m, y_m, height_m):
+        queried_heights.append(height_m)
+        return 5.2
+
+    sensor = NoiseFreeRadiationSensor(
+        total_truth,
+        quantity="synthetic_excess_gamma_dose_rate",
+        unit="uSv/h",
+        value_reference_height_m=1.0,
+        background_value_to_subtract=0.2,
+    )
+
+    measurement = sensor.measure(
+        10.0,
+        20.0,
+        platform_altitude_m=50.0,
+        simulated_time_s=3.0,
+    )
+
+    assert queried_heights == [1.0]
+    assert measurement.platform_altitude_m == 50.0
+    assert measurement.value_reference_height_m == 1.0
+    assert measurement.value == pytest.approx(5.0)
 
 
 def test_noise_free_sensor_preserves_surface_kerma_quantity_and_unit() -> None:

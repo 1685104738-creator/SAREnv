@@ -42,6 +42,66 @@ def greedy_grid_position_to_world(
     return x_offset + col * dx, y_offset + row * dy
 
 
+def greedy_grid_cell_bounds(
+    row: int,
+    col: int,
+    *,
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Return the pixel-edge world bounds for one SAR Greedy cell."""
+    height, width, dx, dy, _, _ = _greedy_grid_geometry(map_shape, bounds)
+    if not 0 <= row < height or not 0 <= col < width:
+        raise IndexError("SAR row/col lies outside map_shape.")
+    minx, miny, _, _ = bounds
+    cell_minx = minx + col * dx
+    cell_miny = miny + row * dy
+    return (
+        cell_minx,
+        cell_miny,
+        cell_minx + dx,
+        cell_miny + dy,
+    )
+
+
+def greedy_searchable_cells(
+    *,
+    map_shape: tuple[int, int],
+    bounds: tuple[float, float, float, float],
+    search_center: tuple[float, float],
+    max_radius: float,
+) -> set[tuple[int, int]]:
+    """Return cells whose centres satisfy Original Greedy's radius rule."""
+    height, width, dx, dy, x_offset, y_offset = _greedy_grid_geometry(
+        map_shape,
+        bounds,
+    )
+    center_x, center_y = search_center
+    radius_squared = max_radius * max_radius
+    return {
+        (row, col)
+        for row in range(height)
+        for col in range(width)
+        if (x_offset + col * dx - center_x) ** 2
+        + (y_offset + row * dy - center_y) ** 2
+        < radius_squared
+    }
+
+
+def native_greedy_step_allowance(
+    map_shape: tuple[int, int],
+    *,
+    num_drones: int = 1,
+) -> int:
+    """Return Original Greedy's resolution-derived maximum move count."""
+    if num_drones <= 0:
+        raise ValueError("num_drones must be positive.")
+    height, width = map_shape
+    if height <= 0 or width <= 0:
+        raise ValueError("map_shape dimensions must be positive.")
+    return height * width // num_drones
+
+
 def greedy_world_to_grid_position(
     x_m: float,
     y_m: float,
@@ -185,7 +245,8 @@ def generate_greedy_continuation_route(
     current_position_m: tuple[float, float],
     observed_cells: set[tuple[int, int]] | frozenset[tuple[int, int]],
     search_center: tuple[float, float],
-    remaining_budget_m: float,
+    remaining_budget_m: float | None = None,
+    remaining_steps: int | None = None,
     probability_map: np.ndarray,
     bounds: tuple[float, float, float, float],
     max_radius: float,
@@ -194,8 +255,15 @@ def generate_greedy_continuation_route(
     rng: np.random.Generator | None = None,
 ) -> LineString:
     """Generate one Original Greedy continuation from actually executed state."""
-    if remaining_budget_m <= 0:
+    if remaining_budget_m is None and remaining_steps is None:
+        raise ValueError("A remaining distance budget or step allowance is required.")
+    if remaining_budget_m is not None and remaining_budget_m <= 0:
         return LineString()
+    if remaining_steps is not None:
+        if isinstance(remaining_steps, bool) or not isinstance(remaining_steps, int):
+            raise TypeError("remaining_steps must be an integer.")
+        if remaining_steps <= 0:
+            return LineString()
     if rng is None:
         rng = np.random.default_rng()
 
@@ -211,10 +279,23 @@ def generate_greedy_continuation_route(
         (float(current_position_m[0]), float(current_position_m[1]))
     ]
     _, _, dx, _, _, _ = _greedy_grid_geometry(probability_map.shape, bounds)
-    max_iterations = remaining_budget_m // dx
+    limits = []
+    if remaining_budget_m is not None:
+        limits.append(int(remaining_budget_m // dx))
+    if remaining_steps is not None:
+        limits.append(remaining_steps)
+    max_iterations = min(limits)
+    searchable_cells = greedy_searchable_cells(
+        map_shape=probability_map.shape,
+        bounds=bounds,
+        search_center=search_center,
+        max_radius=max_radius,
+    )
 
     iteration = 0
     while iteration < max_iterations:
+        if searchable_cells.issubset(working_observed_cells):
+            break
         iteration += 1
         candidates = score_greedy_neighbours(
             current_grid_position,
@@ -250,7 +331,9 @@ def generate_greedy_continuation_route(
     if len(planned_grid_positions) <= 1:
         return LineString()
     route = LineString(planned_world_positions)
-    return restrict_path_length(route, remaining_budget_m)
+    if remaining_budget_m is not None:
+        return restrict_path_length(route, remaining_budget_m)
+    return route
 
 def split_path_for_drones(path: LineString, num_drones: int) -> list[LineString]:
     if num_drones <= 1 or path.is_empty or path.length == 0:
@@ -341,7 +424,11 @@ def generate_pizza_zigzag_path(center_x: float, center_y: float, max_radius: flo
 def generate_greedy_path(center_x: float, center_y: float, num_drones: int, probability_map: np.ndarray, bounds: tuple, max_radius: float, **kwargs) -> list[LineString]:
     height, width = probability_map.shape
     minx, miny, maxx, maxy = bounds
-    rng = np.random.default_rng()
+    rng = kwargs.get("rng")
+    if rng is None:
+        rng = np.random.default_rng()
+    elif not isinstance(rng, np.random.Generator):
+        raise TypeError("rng must be a numpy.random.Generator.")
 
     if maxx <= minx or maxy <= miny:
         return [LineString() for _ in range(num_drones)]
@@ -389,16 +476,34 @@ def generate_greedy_path(center_x: float, center_y: float, num_drones: int, prob
         )
         globally_observed_cells.update(visible_cells)
 
-    max_iterations = height * width // num_drones
+    max_iterations = native_greedy_step_allowance(
+        probability_map.shape,
+        num_drones=num_drones,
+    )
     
     # Estimate max_iterations based on budget (in meters) and minimum move length
     budget = kwargs.get('budget')
     if budget is not None and budget > 0:
         # Each move is at least dx meters (cell width)
         max_iterations = (budget // dx) // num_drones
+    max_steps = kwargs.get("max_steps")
+    if max_steps is not None:
+        if isinstance(max_steps, bool) or not isinstance(max_steps, int):
+            raise TypeError("max_steps must be an integer.")
+        if max_steps < 0:
+            raise ValueError("max_steps must be non-negative.")
+        max_iterations = min(max_iterations, max_steps)
+    searchable_cells = greedy_searchable_cells(
+        map_shape=probability_map.shape,
+        bounds=bounds,
+        search_center=(center_x, center_y),
+        max_radius=max_radius,
+    )
 
     iteration = 0
     while iteration < max_iterations:
+        if searchable_cells.issubset(globally_observed_cells):
+            break
         iteration += 1
         for i in range(num_drones):
             valid_neighbors = score_greedy_neighbours(

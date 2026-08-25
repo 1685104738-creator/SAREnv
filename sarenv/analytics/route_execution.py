@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import time
 
 import numpy as np
 from shapely.geometry import LineString
@@ -13,7 +14,6 @@ from sarenv.radiation.online.interfaces import (
     RadiationMeasurementSource,
 )
 from sarenv.radiation.online.measurement import RadiationMeasurement
-from sarenv.radiation.online.trigger import ConsecutiveRadiationTrigger
 
 from .paths import (
     generate_greedy_continuation_route,
@@ -44,6 +44,13 @@ class ExecutedNodeRadiationObservation:
     measurement: RadiationMeasurement
     updated_radiation_cells: int
     anomaly_confirmed: bool
+    hazard_transition: str | None = None
+    estimator_update_time_s: float = 0.0
+    hazard_episode_index: int | None = None
+    entry_multiplier_initial: float | None = None
+    entry_threshold_current: float | None = None
+    exit_threshold_current: float | None = None
+    base_hazard_reference: float | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,7 @@ class NormalRouteReplanRequest:
     current_position_m: tuple[float, float]
     current_grid_position: tuple[int, int]
     observed_cells: frozenset[tuple[int, int]]
+    reason: str = "radiation_planner_requested_normal"
 
 
 @dataclass(frozen=True)
@@ -80,10 +88,12 @@ class RadiationModeNodeResult:
 class NormalContinuationResult:
     """A new normal route, or a mission-end result when budget is exhausted."""
 
-    remaining_budget_m: float
+    remaining_budget_m: float | None
+    remaining_steps: int | None
     route: LineString | None
     controller: PrecomputedRouteController | None
     mission_complete: bool
+    completion_reason: str | None = None
 
 
 class ExecutedSARState:
@@ -136,6 +146,16 @@ class ExecutedSARState:
     def total_executed_distance_m(self) -> float:
         """Return distance between actually reached positions only."""
         return self._total_executed_distance_m
+
+    @property
+    def executed_node_count(self) -> int:
+        """Return the number of actually reached route nodes across all modes."""
+        return len(self._executed_positions_m)
+
+    @property
+    def executed_move_count(self) -> int:
+        """Return completed inter-node moves; the initial node costs no move."""
+        return max(0, len(self._executed_positions_m) - 1)
 
     def remaining_budget_m(self, initial_budget_m: float) -> float:
         """Return the shared distance budget remaining across all modes."""
@@ -262,14 +282,21 @@ class ExecutedNodeRadiationObserver:
         self,
         measurement_source: RadiationMeasurementSource,
         estimator: OnlineRadiationEstimator,
-        trigger: ConsecutiveRadiationTrigger,
+        trigger,
     ) -> None:
         if not callable(getattr(measurement_source, "measure", None)):
             raise TypeError("measurement_source must provide measure().")
         if not callable(getattr(estimator, "update", None)):
             raise TypeError("estimator must provide update().")
-        if not isinstance(trigger, ConsecutiveRadiationTrigger):
-            raise TypeError("trigger must be a ConsecutiveRadiationTrigger.")
+        required_trigger_attributes = (
+            "observe",
+            "reset",
+            "confirmed",
+            "consecutive_count",
+            "last_transition",
+        )
+        if not all(hasattr(trigger, name) for name in required_trigger_attributes):
+            raise TypeError("trigger does not provide the radiation-mode contract.")
         self._measurement_source = measurement_source
         self._estimator = estimator
         self._trigger = trigger
@@ -284,7 +311,11 @@ class ExecutedNodeRadiationObserver:
 
     def reset_after_radiation_episode(self) -> None:
         """Reset only when one radiation-priority episode returns to normal."""
-        self._trigger.reset()
+        reset_after_episode = getattr(self._trigger, "reset_after_episode", None)
+        if callable(reset_after_episode):
+            reset_after_episode()
+        else:
+            self._trigger.reset()
 
     def observe_executed_node(
         self,
@@ -301,12 +332,41 @@ class ExecutedNodeRadiationObserver:
             altitude_m,
             simulated_time_s,
         )
+        update_started = time.perf_counter()
         updated_cells = self._estimator.update(measurement)
+        estimator_update_time_s = time.perf_counter() - update_started
         confirmed = self._trigger.observe(measurement)
         return ExecutedNodeRadiationObservation(
             measurement=measurement,
             updated_radiation_cells=updated_cells,
             anomaly_confirmed=confirmed,
+            hazard_transition=self._trigger.last_transition,
+            estimator_update_time_s=estimator_update_time_s,
+            hazard_episode_index=getattr(
+                self._trigger,
+                "last_observation_episode_index",
+                None,
+            ),
+            entry_multiplier_initial=getattr(
+                self._trigger,
+                "initial_entry_multiplier",
+                None,
+            ),
+            entry_threshold_current=getattr(
+                self._trigger,
+                "last_observation_entry_threshold",
+                getattr(self._trigger, "enter_threshold", None),
+            ),
+            exit_threshold_current=getattr(
+                self._trigger,
+                "last_observation_exit_threshold",
+                getattr(self._trigger, "exit_threshold", None),
+            ),
+            base_hazard_reference=getattr(
+                self._trigger,
+                "base_hazard_reference",
+                None,
+            ),
         )
 
 
@@ -344,7 +404,8 @@ class RadiationGreedyExecutionController:
         planner: RadiationGreedyStepPlanner,
         observer: ExecutedNodeRadiationObserver,
         *,
-        initial_budget_m: float,
+        initial_budget_m: float | None = None,
+        mission_step_allowance: int | None = None,
     ) -> None:
         if not isinstance(state, ExecutedSARState):
             raise TypeError("state must be an ExecutedSARState.")
@@ -352,12 +413,25 @@ class RadiationGreedyExecutionController:
             raise TypeError("planner must be a RadiationGreedyStepPlanner.")
         if not isinstance(observer, ExecutedNodeRadiationObserver):
             raise TypeError("observer must be an ExecutedNodeRadiationObserver.")
-        if not math.isfinite(initial_budget_m) or initial_budget_m < 0.0:
+        if initial_budget_m is None and mission_step_allowance is None:
+            raise ValueError("A distance budget or mission step allowance is required.")
+        if initial_budget_m is not None and (
+            not math.isfinite(initial_budget_m) or initial_budget_m < 0.0
+        ):
             raise ValueError("initial_budget_m must be finite and non-negative.")
+        if mission_step_allowance is not None and (
+            isinstance(mission_step_allowance, bool)
+            or not isinstance(mission_step_allowance, int)
+            or mission_step_allowance <= 0
+        ):
+            raise ValueError("mission_step_allowance must be a positive integer.")
         self.state = state
         self.planner = planner
         self.observer = observer
-        self.initial_budget_m = float(initial_budget_m)
+        self.initial_budget_m = (
+            None if initial_budget_m is None else float(initial_budget_m)
+        )
+        self.mission_step_allowance = mission_step_allowance
         self._step_index = 0
         self._normal_replan_requested = False
 
@@ -374,7 +448,7 @@ class RadiationGreedyExecutionController:
             raise RuntimeError("Radiation Greedy requires a confirmed anomaly.")
         if self.state.current_grid_position is None:
             raise RuntimeError("Radiation Greedy requires an executed current position.")
-        if self.state.remaining_budget_m(self.initial_budget_m) <= 0.0:
+        if self._mission_limit_reached():
             return RadiationModeNodeResult(
                 plan=None,
                 selected_candidate=None,
@@ -397,21 +471,27 @@ class RadiationGreedyExecutionController:
                 selected_candidate=None,
                 route_execution=None,
                 radiation_observation=None,
-                normal_route_replan=self._normal_replan_request(),
+                normal_route_replan=self._normal_replan_request(
+                    "no_valid_radiation_candidate"
+                ),
                 mission_complete=False,
             )
 
         previous_position = self.state.current_position_m
         position = (candidate.x_m, candidate.y_m)
         distance_m = math.dist(previous_position, position)
-        if distance_m > self.state.remaining_budget_m(self.initial_budget_m):
+        if self.initial_budget_m is not None and distance_m > self.state.remaining_budget_m(
+            self.initial_budget_m
+        ):
             self._normal_replan_requested = True
             return RadiationModeNodeResult(
                 plan=plan,
                 selected_candidate=None,
                 route_execution=None,
                 radiation_observation=None,
-                normal_route_replan=self._normal_replan_request(),
+                normal_route_replan=self._normal_replan_request(
+                    "insufficient_distance_budget"
+                ),
                 mission_complete=False,
             )
         grid_position = self.state.record_node_arrival(*position)
@@ -429,16 +509,31 @@ class RadiationGreedyExecutionController:
             altitude_m=altitude_m,
             simulated_time_s=simulated_time_s,
         )
+        normal_route_replan = None
+        if observation.hazard_transition == "exit":
+            self._normal_replan_requested = True
+            normal_route_replan = self._normal_replan_request(
+                "hazard_exit_threshold"
+            )
         return RadiationModeNodeResult(
             plan=plan,
             selected_candidate=candidate,
             route_execution=execution,
             radiation_observation=observation,
-            normal_route_replan=None,
+            normal_route_replan=normal_route_replan,
             mission_complete=False,
         )
 
-    def _normal_replan_request(self) -> NormalRouteReplanRequest:
+    def _mission_limit_reached(self) -> bool:
+        if self.mission_step_allowance is not None and (
+            self.state.executed_move_count >= self.mission_step_allowance
+        ):
+            return True
+        return self.initial_budget_m is not None and (
+            self.state.remaining_budget_m(self.initial_budget_m) <= 0.0
+        )
+
+    def _normal_replan_request(self, reason: str) -> NormalRouteReplanRequest:
         if self.state.current_position_m is None:
             raise RuntimeError("Normal replanning requires a current position.")
         if self.state.current_grid_position is None:
@@ -447,6 +542,7 @@ class RadiationGreedyExecutionController:
             current_position_m=self.state.current_position_m,
             current_grid_position=self.state.current_grid_position,
             observed_cells=self.state.observed_cells,
+            reason=reason,
         )
 
 
@@ -455,7 +551,9 @@ def resume_normal_route_after_radiation(
     state: ExecutedSARState,
     observer: ExecutedNodeRadiationObserver,
     *,
-    initial_budget_m: float,
+    initial_budget_m: float | None = None,
+    mission_step_allowance: int | None = None,
+    rng: np.random.Generator | None = None,
     probability_map: np.ndarray,
     bounds: tuple[float, float, float, float],
     search_center: tuple[float, float],
@@ -473,13 +571,30 @@ def resume_normal_route_after_radiation(
     if request.observed_cells != state.observed_cells:
         raise ValueError("Replan request observed SAR state is stale.")
 
-    remaining_budget_m = state.remaining_budget_m(initial_budget_m)
-    if remaining_budget_m <= 0.0:
+    if initial_budget_m is None and mission_step_allowance is None:
+        raise ValueError("A distance budget or mission step allowance is required.")
+    remaining_budget_m = (
+        None
+        if initial_budget_m is None
+        else state.remaining_budget_m(initial_budget_m)
+    )
+    remaining_steps = (
+        None
+        if mission_step_allowance is None
+        else max(0, mission_step_allowance - state.executed_move_count)
+    )
+    if (remaining_budget_m is not None and remaining_budget_m <= 0.0) or (
+        remaining_steps is not None and remaining_steps <= 0
+    ):
         return NormalContinuationResult(
-            remaining_budget_m=0.0,
+            remaining_budget_m=(
+                0.0 if remaining_budget_m is not None else None
+            ),
+            remaining_steps=(0 if remaining_steps is not None else None),
             route=None,
             controller=None,
             mission_complete=True,
+            completion_reason="mission_limit_reached",
         )
 
     route = generate_greedy_continuation_route(
@@ -487,11 +602,13 @@ def resume_normal_route_after_radiation(
         observed_cells=request.observed_cells,
         search_center=search_center,
         remaining_budget_m=remaining_budget_m,
+        remaining_steps=remaining_steps,
         probability_map=probability_map,
         bounds=bounds,
         max_radius=max_radius,
         fov_deg=fov_deg,
         altitude=altitude,
+        rng=rng,
     )
     controller = PrecomputedRouteController(
         route,
@@ -501,6 +618,7 @@ def resume_normal_route_after_radiation(
     observer.reset_after_radiation_episode()
     return NormalContinuationResult(
         remaining_budget_m=remaining_budget_m,
+        remaining_steps=remaining_steps,
         route=route,
         controller=controller,
         mission_complete=False,

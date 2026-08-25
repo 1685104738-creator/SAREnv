@@ -14,8 +14,13 @@ if __name__ == "__main__":
     log.info("--- Starting lost_person Location Generation Example for Custom Area ---")
 
     example_directory = Path(__file__).resolve().parent
-    dataset_dir = example_directory / "sarenv_outputs" / "radiation_area_01"
+    dataset_dir = (
+        example_directory
+        / "sarenv_outputs"
+        / "radiation_area_01_small_20m"
+    )
     num_locations = 100
+    survivor_seed = 42
 
     try:
         # The saved metadata is authoritative for the physical dataset size.
@@ -28,7 +33,10 @@ if __name__ == "__main__":
 
         # 2. Initialize the lost_person location generator with the loaded data
         log.info("Initializing the lost_person LocationGenerator.")
-        lost_person_generator = LostPersonLocationGenerator(dataset_item)
+        lost_person_generator = LostPersonLocationGenerator(
+            dataset_item,
+            seed=survivor_seed,
+        )
 
         # 3. Generate lost_person locations
         log.info(f"Generating {num_locations} lost_person locations...")

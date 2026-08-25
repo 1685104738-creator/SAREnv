@@ -1,0 +1,30 @@
+{
+  "bounds_projected": [
+    522370.9204974669,
+    5696374.290406497,
+    523570.920497467,
+    5697574.290406496
+  ],
+  "center_point": [
+    -2.66962,
+    51.42351
+  ],
+  "climate": "temperate",
+  "dataset_type": "sarenv_base",
+  "environment_size": "small",
+  "environment_type": "flat",
+  "features_filename": "features.geojson",
+  "heatmap_filename": "heatmap.npy",
+  "meter_per_bin": 20.0,
+  "probability_contract": "sum_to_one_within_saved_environment",
+  "projected_crs": "EPSG:32630",
+  "quantity": "lost_person_probability",
+  "radius_km": 0.6,
+  "raster_axis_order": "row_y_column_x",
+  "raster_origin": "lower",
+  "raster_shape": [
+    60,
+    60
+  ],
+  "schema_version": 1
+}
