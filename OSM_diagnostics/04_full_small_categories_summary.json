@@ -1,0 +1,969 @@
+{
+  "probe": "04 full Direct Small categories sequential",
+  "started_utc": "2026-08-25T15:14:39.986537+00:00",
+  "completed_utc": "2026-08-25T15:25:04.860691+00:00",
+  "osmnx_version": "2.1.0",
+  "overpass_settings": {
+    "original": {
+      "overpass_url": "https://overpass-api.de/api",
+      "requests_timeout": 180,
+      "use_cache": true,
+      "cache_folder": "./cache",
+      "overpass_rate_limit": true,
+      "overpass_settings": "[out:json][timeout:{timeout}]{maxsize}"
+    },
+    "effective": {
+      "overpass_url": "https://overpass-api.de/api",
+      "requests_timeout": 180,
+      "use_cache": false,
+      "cache_folder": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\cache",
+      "overpass_rate_limit": true,
+      "overpass_settings": "[out:json][timeout:{timeout}]{maxsize}"
+    }
+  },
+  "polygon": {
+    "metadata_source": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m\\metadata.json",
+    "center_wgs84": [
+      -2.66962,
+      51.42351
+    ],
+    "projected_crs": "EPSG:32630",
+    "projected_bounds": [
+      522370.9204974669,
+      5696374.290406497,
+      523570.920497467,
+      5697574.290406496
+    ],
+    "wgs84_bounds": [
+      -2.6782872498048738,
+      51.41809034647037,
+      -2.6609507181508123,
+      51.428929022627095
+    ],
+    "width_m": 1200.0000000000582,
+    "height_m": 1199.9999999990687
+  },
+  "category_count": 10,
+  "tags_mapping": {
+    "structure": {
+      "building": true,
+      "man_made": true,
+      "bridge": true,
+      "tunnel": true
+    },
+    "road": {
+      "highway": true,
+      "tracktype": true
+    },
+    "linear": {
+      "railway": true,
+      "barrier": true,
+      "fence": true,
+      "wall": true,
+      "pipeline": true
+    },
+    "drainage": {
+      "waterway": [
+        "drain",
+        "ditch",
+        "culvert",
+        "canal"
+      ]
+    },
+    "water": {
+      "natural": [
+        "water",
+        "wetland"
+      ],
+      "water": true,
+      "wetland": true,
+      "reservoir": true
+    },
+    "brush": {
+      "landuse": [
+        "grass"
+      ]
+    },
+    "scrub": {
+      "natural": "scrub"
+    },
+    "woodland": {
+      "landuse": [
+        "forest",
+        "wood"
+      ],
+      "natural": "wood"
+    },
+    "field": {
+      "landuse": [
+        "farmland",
+        "farm",
+        "meadow"
+      ]
+    },
+    "rock": {
+      "natural": [
+        "rock",
+        "bare_rock",
+        "scree",
+        "cliff"
+      ]
+    }
+  },
+  "execution_mode": "strictly sequential; no process/thread executor",
+  "retry_policy": "one recorded retry only for FAIL_QUERY; no retry for PASS_EMPTY",
+  "source_lock": {
+    "initial_main_commit": "0f2d344d17c0b9c18cec2176dd9b171beba727d6",
+    "worktree_branch_at_execution": "radiation-evaluation",
+    "worktree_head_at_execution": "c3e200464f54b13be90f206e10e212eeff1d32b3",
+    "current_worktree_mapping_matches_initial_main": true,
+    "http_user_agent": "OSMnx Python package (https://github.com/gboeing/osmnx)"
+  },
+  "category_results": [
+    {
+      "category": "structure",
+      "tags": {
+        "building": true,
+        "man_made": true,
+        "bridge": true,
+        "tunnel": true
+      },
+      "start_time_utc": "2026-08-25T15:14:39.988542+00:00",
+      "elapsed_seconds": 107.71801090000372,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:14:39.988542+00:00",
+          "elapsed_seconds": 102.19893919999595,
+          "status": "FAIL_QUERY",
+          "exception_class": "requests.exceptions.ConnectTimeout",
+          "exception_text": "HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17eff812240>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))",
+          "exception_repr": "ConnectTimeout(MaxRetryError(\"HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17eff812240>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))\"))"
+        },
+        {
+          "attempt": 2,
+          "start_time_utc": "2026-08-25T15:16:22.200970+00:00",
+          "elapsed_seconds": 5.506266399999731,
+          "status": "PASS_WITH_DATA",
+          "row_count": 1146
+        }
+      ],
+      "error": null,
+      "row_count": 1146,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 1146,
+        "top_level_geometry_type_counts": {
+          "LineString": 6,
+          "Point": 2,
+          "Polygon": 1138
+        },
+        "recursive_geometry_type_counts": {
+          "LineString": 6,
+          "Point": 2,
+          "Polygon": 1138
+        },
+        "geometry_type_paths": {
+          "LineString": 6,
+          "Point": 2,
+          "Polygon": 1138
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\structure.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "building",
+          "man_made",
+          "bridge",
+          "tunnel"
+        ],
+        "geometries": {
+          "building": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 593
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 593
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          },
+          "man_made": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "GeometryCollection": 1
+            },
+            "recursive_geometry_type_counts": {
+              "GeometryCollection": 1,
+              "Point": 2,
+              "Polygon": 1
+            },
+            "geometry_type_paths": {
+              "GeometryCollection -> Point": 2,
+              "GeometryCollection -> Polygon": 1
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": true
+          },
+          "bridge": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiLineString": 1
+            },
+            "recursive_geometry_type_counts": {
+              "LineString": 3,
+              "MultiLineString": 1
+            },
+            "geometry_type_paths": {
+              "MultiLineString -> LineString": 3
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": true,
+            "has_GeometryCollection": false
+          },
+          "tunnel": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiLineString": 1
+            },
+            "recursive_geometry_type_counts": {
+              "LineString": 3,
+              "MultiLineString": 1
+            },
+            "geometry_type_paths": {
+              "MultiLineString -> LineString": 3
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": true,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "road",
+      "tags": {
+        "highway": true,
+        "tracktype": true
+      },
+      "start_time_utc": "2026-08-25T15:16:28.541057+00:00",
+      "elapsed_seconds": 2.8638062000100035,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:16:28.541057+00:00",
+          "elapsed_seconds": 2.86360360000981,
+          "status": "PASS_WITH_DATA",
+          "row_count": 265
+        }
+      ],
+      "error": null,
+      "row_count": 265,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 265,
+        "top_level_geometry_type_counts": {
+          "LineString": 215,
+          "Point": 50
+        },
+        "recursive_geometry_type_counts": {
+          "LineString": 215,
+          "Point": 50
+        },
+        "geometry_type_paths": {
+          "LineString": 215,
+          "Point": 50
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\road.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "highway",
+          "tracktype"
+        ],
+        "geometries": {
+          "highway": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "GeometryCollection": 1
+            },
+            "recursive_geometry_type_counts": {
+              "GeometryCollection": 1,
+              "LineString": 357,
+              "Point": 40
+            },
+            "geometry_type_paths": {
+              "GeometryCollection -> LineString": 357,
+              "GeometryCollection -> Point": 40
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": true
+          },
+          "tracktype": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "LineString": 1
+            },
+            "recursive_geometry_type_counts": {
+              "LineString": 1
+            },
+            "geometry_type_paths": {
+              "LineString": 1
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "linear",
+      "tags": {
+        "railway": true,
+        "barrier": true,
+        "fence": true,
+        "wall": true,
+        "pipeline": true
+      },
+      "start_time_utc": "2026-08-25T15:16:31.497579+00:00",
+      "elapsed_seconds": 59.981617299999925,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:16:31.497579+00:00",
+          "elapsed_seconds": 59.98140279999643,
+          "status": "PASS_WITH_DATA",
+          "row_count": 84
+        }
+      ],
+      "error": null,
+      "row_count": 84,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 84,
+        "top_level_geometry_type_counts": {
+          "LineString": 62,
+          "Point": 21,
+          "Polygon": 1
+        },
+        "recursive_geometry_type_counts": {
+          "LineString": 62,
+          "Point": 21,
+          "Polygon": 1
+        },
+        "geometry_type_paths": {
+          "LineString": 62,
+          "Point": 21,
+          "Polygon": 1
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\linear.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "railway",
+          "barrier"
+        ],
+        "geometries": {
+          "railway": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiLineString": 1
+            },
+            "recursive_geometry_type_counts": {
+              "LineString": 2,
+              "MultiLineString": 1
+            },
+            "geometry_type_paths": {
+              "MultiLineString -> LineString": 2
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": true,
+            "has_GeometryCollection": false
+          },
+          "barrier": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "GeometryCollection": 1
+            },
+            "recursive_geometry_type_counts": {
+              "GeometryCollection": 1,
+              "LineString": 88,
+              "Point": 14,
+              "Polygon": 1
+            },
+            "geometry_type_paths": {
+              "GeometryCollection -> LineString": 88,
+              "GeometryCollection -> Point": 14,
+              "GeometryCollection -> Polygon": 1
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": true
+          }
+        }
+      }
+    },
+    {
+      "category": "drainage",
+      "tags": {
+        "waterway": [
+          "drain",
+          "ditch",
+          "culvert",
+          "canal"
+        ]
+      },
+      "start_time_utc": "2026-08-25T15:17:31.518854+00:00",
+      "elapsed_seconds": 8.276729500008514,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:17:31.518854+00:00",
+          "elapsed_seconds": 8.276525700013735,
+          "status": "PASS_WITH_DATA",
+          "row_count": 1
+        }
+      ],
+      "error": null,
+      "row_count": 1,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 1,
+        "top_level_geometry_type_counts": {
+          "LineString": 1
+        },
+        "recursive_geometry_type_counts": {
+          "LineString": 1
+        },
+        "geometry_type_paths": {
+          "LineString": 1
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\drainage.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "waterway"
+        ],
+        "geometries": {
+          "waterway": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "LineString": 1
+            },
+            "recursive_geometry_type_counts": {
+              "LineString": 1
+            },
+            "geometry_type_paths": {
+              "LineString": 1
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "water",
+      "tags": {
+        "natural": [
+          "water",
+          "wetland"
+        ],
+        "water": true,
+        "wetland": true,
+        "reservoir": true
+      },
+      "start_time_utc": "2026-08-25T15:17:39.807548+00:00",
+      "elapsed_seconds": 54.13726660000975,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:17:39.807548+00:00",
+          "elapsed_seconds": 54.13706209999509,
+          "status": "PASS_WITH_DATA",
+          "row_count": 2
+        }
+      ],
+      "error": null,
+      "row_count": 2,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 2,
+        "top_level_geometry_type_counts": {
+          "Polygon": 2
+        },
+        "recursive_geometry_type_counts": {
+          "Polygon": 2
+        },
+        "geometry_type_paths": {
+          "Polygon": 2
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\water.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "natural",
+          "water"
+        ],
+        "geometries": {
+          "natural": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 2
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 2
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          },
+          "water": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 2
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 2
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "brush",
+      "tags": {
+        "landuse": [
+          "grass"
+        ]
+      },
+      "start_time_utc": "2026-08-25T15:18:33.958788+00:00",
+      "elapsed_seconds": 10.997609400001238,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:18:33.958788+00:00",
+          "elapsed_seconds": 10.99740560000646,
+          "status": "PASS_WITH_DATA",
+          "row_count": 17
+        }
+      ],
+      "error": null,
+      "row_count": 17,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 17,
+        "top_level_geometry_type_counts": {
+          "Polygon": 17
+        },
+        "recursive_geometry_type_counts": {
+          "Polygon": 17
+        },
+        "geometry_type_paths": {
+          "Polygon": 17
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\brush.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "landuse"
+        ],
+        "geometries": {
+          "landuse": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 17
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 17
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "scrub",
+      "tags": {
+        "natural": "scrub"
+      },
+      "start_time_utc": "2026-08-25T15:18:44.975620+00:00",
+      "elapsed_seconds": 34.656279300004826,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:18:44.975620+00:00",
+          "elapsed_seconds": 34.65604929999972,
+          "status": "PASS_WITH_DATA",
+          "row_count": 10
+        }
+      ],
+      "error": null,
+      "row_count": 10,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 10,
+        "top_level_geometry_type_counts": {
+          "Polygon": 10
+        },
+        "recursive_geometry_type_counts": {
+          "Polygon": 10
+        },
+        "geometry_type_paths": {
+          "Polygon": 10
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\scrub.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "natural"
+        ],
+        "geometries": {
+          "natural": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 9
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 9
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "woodland",
+      "tags": {
+        "landuse": [
+          "forest",
+          "wood"
+        ],
+        "natural": "wood"
+      },
+      "start_time_utc": "2026-08-25T15:19:19.649053+00:00",
+      "elapsed_seconds": 16.211662100002286,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:19:19.649053+00:00",
+          "elapsed_seconds": 16.211459599988302,
+          "status": "PASS_WITH_DATA",
+          "row_count": 15
+        }
+      ],
+      "error": null,
+      "row_count": 15,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 15,
+        "top_level_geometry_type_counts": {
+          "Polygon": 15
+        },
+        "recursive_geometry_type_counts": {
+          "Polygon": 15
+        },
+        "geometry_type_paths": {
+          "Polygon": 15
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\woodland.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "landuse",
+          "natural"
+        ],
+        "geometries": {
+          "landuse": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "Polygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "Polygon": 1
+            },
+            "geometry_type_paths": {
+              "Polygon": 1
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": false,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          },
+          "natural": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 11
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 11
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "field",
+      "tags": {
+        "landuse": [
+          "farmland",
+          "farm",
+          "meadow"
+        ]
+      },
+      "start_time_utc": "2026-08-25T15:19:35.887005+00:00",
+      "elapsed_seconds": 45.68499360000715,
+      "status": "PASS_WITH_DATA",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:19:35.887005+00:00",
+          "elapsed_seconds": 45.684797100009746,
+          "status": "PASS_WITH_DATA",
+          "row_count": 35
+        }
+      ],
+      "error": null,
+      "row_count": 35,
+      "crs": "epsg:4326",
+      "geometry_summary": {
+        "top_level_geometry_count": 35,
+        "top_level_geometry_type_counts": {
+          "Polygon": 35
+        },
+        "recursive_geometry_type_counts": {
+          "Polygon": 35
+        },
+        "geometry_type_paths": {
+          "Polygon": 35
+        },
+        "empty_geometry_count": 0,
+        "invalid_geometry_count": 0,
+        "has_MultiPolygon": false,
+        "has_MultiLineString": false,
+        "has_GeometryCollection": false
+      },
+      "diagnostic_geojson": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\OSM_diagnostics\\features\\field.geojson",
+      "sarenv_wrapper_on_same_raw_response": {
+        "returned_none": false,
+        "returned_keys": [
+          "landuse"
+        ],
+        "geometries": {
+          "landuse": {
+            "top_level_geometry_count": 1,
+            "top_level_geometry_type_counts": {
+              "MultiPolygon": 1
+            },
+            "recursive_geometry_type_counts": {
+              "MultiPolygon": 1,
+              "Polygon": 11
+            },
+            "geometry_type_paths": {
+              "MultiPolygon -> Polygon": 11
+            },
+            "empty_geometry_count": 0,
+            "invalid_geometry_count": 0,
+            "has_MultiPolygon": true,
+            "has_MultiLineString": false,
+            "has_GeometryCollection": false
+          }
+        }
+      }
+    },
+    {
+      "category": "rock",
+      "tags": {
+        "natural": [
+          "rock",
+          "bare_rock",
+          "scree",
+          "cliff"
+        ]
+      },
+      "start_time_utc": "2026-08-25T15:20:21.601694+00:00",
+      "elapsed_seconds": 283.2552834000089,
+      "status": "FAIL_QUERY",
+      "attempts": [
+        {
+          "attempt": 1,
+          "start_time_utc": "2026-08-25T15:20:21.601694+00:00",
+          "elapsed_seconds": 181.07354569999734,
+          "status": "FAIL_QUERY",
+          "exception_class": "requests.exceptions.ConnectTimeout",
+          "exception_text": "HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8eb3f4d0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))",
+          "exception_repr": "ConnectTimeout(MaxRetryError(\"HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8eb3f4d0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))\"))"
+        },
+        {
+          "attempt": 2,
+          "start_time_utc": "2026-08-25T15:23:22.680714+00:00",
+          "elapsed_seconds": 102.16956880000362,
+          "status": "FAIL_QUERY",
+          "exception_class": "requests.exceptions.ConnectTimeout",
+          "exception_text": "HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8d830ef0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))",
+          "exception_repr": "ConnectTimeout(MaxRetryError(\"HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8d830ef0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))\"))"
+        }
+      ],
+      "error": {
+        "exception_class": "requests.exceptions.ConnectTimeout",
+        "exception_text": "HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8d830ef0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))",
+        "exception_repr": "ConnectTimeout(MaxRetryError(\"HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x17e8d830ef0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))\"))"
+      }
+    }
+  ],
+  "status_counts": {
+    "PASS_WITH_DATA": 9,
+    "FAIL_QUERY": 1
+  },
+  "multi_geometry_categories": {
+    "raw_osmnx_rows": {
+      "MultiPolygon": [],
+      "MultiLineString": [],
+      "GeometryCollection": []
+    },
+    "sarenv_wrapper_outputs": {
+      "MultiPolygon": [
+        "structure",
+        "water",
+        "brush",
+        "scrub",
+        "woodland",
+        "field"
+      ],
+      "MultiLineString": [
+        "structure",
+        "linear"
+      ],
+      "GeometryCollection": [
+        "structure",
+        "road",
+        "linear"
+      ]
+    }
+  }
+}

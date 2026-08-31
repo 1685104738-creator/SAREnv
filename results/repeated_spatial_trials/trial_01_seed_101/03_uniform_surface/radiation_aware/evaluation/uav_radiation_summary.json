@@ -1,0 +1,21 @@
+{
+  "distance_integral_unit": "uGy/h*m",
+  "dose_unit": "uGy",
+  "evaluation_speed_m_s": 10.0,
+  "integration_method": "piecewise_linear_route_fixed_distance_trapezoid",
+  "integration_step_m": 1.0,
+  "radiation_quantity": "collision_air_kerma_rate",
+  "rate_unit": "uGy/h",
+  "sample_count": 87584,
+  "sampled_excess_rate_max": 0.17680651002089792,
+  "sampled_excess_rate_min": 0.0,
+  "sampled_total_rate_max": 0.17680651002089792,
+  "sampled_total_rate_min": 0.0,
+  "speed_status": "provisional",
+  "truth_query_height_m": 50.0,
+  "truth_source": "post_run_ground_truth_query_not_planner_estimator",
+  "uav_cumulative_excess_dose": 0.02853973472876743,
+  "uav_cumulative_total_dose": 0.02853973472876743,
+  "uav_excess_exposure_distance_integral": 1027.4304502356274,
+  "uav_total_exposure_distance_integral": 1027.4304502356274
+}

@@ -1,0 +1,58 @@
+{
+  "all_checks_pass": true,
+  "canonical_original_route_sha256": "576d389db13f60cb4b38266cae8f7c963b35ff1ee7f1c866b622c678ad850312",
+  "evaluator_truth_access": true,
+  "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+  "original_radiation_blind": true,
+  "planner_full_truth_access": false,
+  "planner_seed": 42,
+  "radiation_changes_sar_truth": false,
+  "radiation_changes_survivor_truth": false,
+  "same_start_definition": "frozen SAR environment centre mapped by native Greedy",
+  "scenario_checks": {
+    "final_three_point_stress_scenario": {
+      "original_evaluation_used_canonical_route": true,
+      "radiation_aware_complete": true,
+      "radiation_unit_contract": {
+        "dose_unit": "uSv",
+        "quantity": "synthetic_gamma_dose_rate",
+        "rate_unit": "uSv/h"
+      },
+      "same_altitude": true,
+      "same_fov": true,
+      "same_heatmap_hash": true,
+      "same_survivor_hash": true,
+      "scenario_config_sha256": "26ea2b13fb02ecb84689409f2d4926966ba2e329daddb338954eee325d4c29b2"
+    },
+    "final_uniform_cs137_surface": {
+      "original_evaluation_used_canonical_route": true,
+      "radiation_aware_complete": true,
+      "radiation_unit_contract": {
+        "dose_unit": "uGy",
+        "quantity": "collision_air_kerma_rate",
+        "rate_unit": "uGy/h"
+      },
+      "same_altitude": true,
+      "same_fov": true,
+      "same_heatmap_hash": true,
+      "same_survivor_hash": true,
+      "scenario_config_sha256": "e5274662c7b6449d843f3beeb46a7335094238e80a4f233d719c5b8d9988296c"
+    },
+    "single_point_formal_first_run": {
+      "original_evaluation_used_canonical_route": true,
+      "radiation_aware_complete": true,
+      "radiation_unit_contract": {
+        "dose_unit": "uSv",
+        "quantity": "synthetic_gamma_dose_rate",
+        "rate_unit": "uSv/h"
+      },
+      "same_altitude": true,
+      "same_fov": true,
+      "same_heatmap_hash": true,
+      "same_survivor_hash": true,
+      "scenario_config_sha256": "6af0e86012a2c1d40691d24c40f1f6c60ad765285bfe61079f7b311f622121c3"
+    }
+  },
+  "sensor_truth_access_only_at_executed_nodes": true,
+  "survivors_sha256": "652c1bf882d7f537664edec320d40b4b9fe791a9901d666c8643c4978d05f17e"
+}

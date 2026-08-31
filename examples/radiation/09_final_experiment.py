@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -31,7 +31,12 @@ from matplotlib.colors import Normalize
 import numpy as np
 from shapely.geometry import box
 
-from sarenv import DatasetLoader, load_lost_person_locations
+from sarenv import (
+    DatasetLoader,
+    LostPersonLocationGenerator,
+    load_lost_person_locations,
+    save_lost_person_locations,
+)
 from sarenv.analytics.mission_mode import MissionMode, MissionModeController
 from sarenv.analytics.paths import (
     generate_greedy_path,
@@ -88,8 +93,13 @@ DATASET_DIRECTORY = (
     / "radiation_area_01_small_20m"
 )
 FINAL_ROOT = REPOSITORY_ROOT / "results" / "final_experiment"
+REPEATED_ROOT = REPOSITORY_ROOT / "results" / "repeated_spatial_trials"
 
 PLANNER_SEED = 42
+TRIAL_SEEDS = (
+    101, 203, 307, 401, 509, 601, 709, 809, 907, 1009,
+    1103, 1201, 1307, 1409, 1511, 1601, 1709, 1801, 1907, 2003,
+)
 FOV_DEG = 45.0
 PLATFORM_ALTITUDE_M = 50.0
 VALUE_REFERENCE_HEIGHT_M = 1.0
@@ -130,6 +140,7 @@ TruthQuery = Callable[[float, float, float], float]
 class FrozenContext:
     item: object
     survivors: object
+    survivors_path: Path
     probability_map: np.ndarray
     bounds: tuple[float, float, float, float]
     search_center: tuple[float, float]
@@ -217,6 +228,7 @@ def load_frozen_context() -> FrozenContext:
     return FrozenContext(
         item=item,
         survivors=survivors,
+        survivors_path=survivors_path,
         probability_map=probability_map,
         bounds=bounds,
         search_center=search_center,
@@ -509,8 +521,17 @@ def freeze_point_scenario(
     context: FrozenContext,
     *,
     multi: bool,
+    anchor_offset_m: tuple[float, float] | None = None,
 ) -> FrozenRadiationScenario:
-    offsets = MULTI_POINT_OFFSETS_M if multi else (SINGLE_POINT_OFFSET_M,)
+    original_offsets = MULTI_POINT_OFFSETS_M if multi else (SINGLE_POINT_OFFSET_M,)
+    offsets = (
+        original_offsets
+        if anchor_offset_m is None
+        else tuple(
+            (anchor_offset_m[0] + x_m, anchor_offset_m[1] + y_m)
+            for x_m, y_m in original_offsets
+        )
+    )
     sources = tuple(
         _point_source(
             context,
@@ -545,8 +566,13 @@ def freeze_point_scenario(
         "background_rate": POINT_BACKGROUND_USV_H,
         "background_unit": POINT_RATE_UNIT,
         "sources": [source.to_metadata() for source in sources],
+        "configuration_anchor_offset_m": (
+            [0.0, 0.0] if anchor_offset_m is None else list(anchor_offset_m)
+        ),
         "source_configuration_rule": (
-            "three deterministic centre-relative offsets fixed before planning; "
+            "trial-seed whole-configuration translation preserving all relative offsets"
+            if anchor_offset_m is not None
+            else "three deterministic centre-relative offsets fixed before planning; "
             "independent of survivors and routes"
             if multi
             else "reused validated single_point_formal_first_run position"
@@ -581,8 +607,13 @@ def freeze_point_scenario(
     )
 
 
-def freeze_surface_scenario(context: FrozenContext) -> FrozenRadiationScenario:
-    center_x, center_y = context.search_center
+def freeze_surface_scenario(
+    context: FrozenContext,
+    *,
+    anchor_offset_m: tuple[float, float] = (0.0, 0.0),
+) -> FrozenRadiationScenario:
+    center_x = context.search_center[0] + anchor_offset_m[0]
+    center_y = context.search_center[1] + anchor_offset_m[1]
     geometry = box(
         center_x - SURFACE_HALF_WIDTH_M,
         center_y - SURFACE_HALF_HEIGHT_M,
@@ -639,6 +670,7 @@ def freeze_surface_scenario(context: FrozenContext) -> FrozenRadiationScenario:
         "polygon_exterior_coordinates": [
             [float(x), float(y)] for x, y in geometry.exterior.coords
         ],
+        "configuration_anchor_offset_m": list(anchor_offset_m),
         "patch_bounds": list(grid.bounds),
         "patch_shape": list(grid.shape),
         "patch_padding_m": SURFACE_PATCH_PADDING_M,
@@ -665,7 +697,9 @@ def freeze_surface_scenario(context: FrozenContext) -> FrozenRadiationScenario:
             truth.platform_patch.collision_air_kerma_rate_uGy_h.max()
         ),
         "configuration_rule": (
-            "deterministic rectangle centred on the frozen SAR environment; "
+            "trial-seed centre translation with fixed rectangle shape and orientation"
+            if anchor_offset_m != (0.0, 0.0)
+            else "deterministic rectangle centred on the frozen SAR environment; "
             "fixed before planning and independent of survivors/routes"
         ),
     }
@@ -1052,7 +1086,7 @@ def evaluate_route(
         EvaluationConfig(
             trajectory_path=trajectory_path,
             dataset_directory=DATASET_DIRECTORY,
-            survivors_path=DATASET_DIRECTORY / "lost_persons.json",
+            survivors_path=context.survivors_path,
             scenario_parameters_path=(
                 FINAL_ROOT / scenario.directory_name / "scenario_config.json"
             ),
@@ -1947,15 +1981,131 @@ def run_final_experiment() -> None:
     generate_combined_outputs(context, (single, multiple, surface))
 
 
+def _sample_legal_anchor(
+    rng: np.random.Generator,
+    component_offsets: tuple[tuple[float, float], ...],
+    radius_m: float,
+) -> tuple[float, float]:
+    """Sample one translation while keeping every component in the search circle."""
+    for _ in range(10_000):
+        anchor = tuple(float(value) for value in rng.uniform(-radius_m, radius_m, 2))
+        if all(
+            math.hypot(anchor[0] + x_m, anchor[1] + y_m) <= radius_m
+            for x_m, y_m in component_offsets
+        ):
+            return anchor
+    raise RuntimeError("Could not sample a legal radiation anchor.")
+
+
+def _trial_context(base: FrozenContext, trial_seed: int) -> FrozenContext:
+    points = LostPersonLocationGenerator(base.item, seed=trial_seed).generate_locations(
+        len(base.survivors.points), 0
+    )
+    if len(points) != len(base.survivors.points):
+        raise RuntimeError("Trial survivor generation returned the wrong count.")
+    survivors_path = save_lost_person_locations(
+        points,
+        base.item,
+        FINAL_ROOT / "inputs" / "lost_persons.json",
+    )
+    return replace(
+        base,
+        survivors=load_lost_person_locations(survivors_path),
+        survivors_path=survivors_path,
+        survivor_sha256=_sha256(survivors_path),
+    )
+
+
+def run_spatial_repeated_trials(seeds: tuple[int, ...]) -> None:
+    """Repeat the unchanged complete experiment for seeded spatial realisations."""
+    global FINAL_ROOT
+    if len(set(seeds)) != len(seeds):
+        raise ValueError("Trial seeds must be unique.")
+    canonical_root = FINAL_ROOT
+    base = load_frozen_context()
+    aggregate: list[dict[str, object]] = []
+    try:
+        for trial_id, trial_seed in enumerate(seeds, start=1):
+            FINAL_ROOT = REPEATED_ROOT / f"trial_{trial_id:02d}_seed_{trial_seed}"
+            print(f"Trial {trial_id:02d}/{len(seeds)} | seed={trial_seed}", flush=True)
+            context = _trial_context(base, trial_seed)
+            rng = np.random.default_rng(trial_seed)
+            single_anchor = _sample_legal_anchor(
+                rng, (SINGLE_POINT_OFFSET_M,), context.max_radius_m
+            )
+            multi_anchor = _sample_legal_anchor(
+                rng, MULTI_POINT_OFFSETS_M, context.max_radius_m
+            )
+            surface_corners = (
+                (-SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
+                (-SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
+                (SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
+                (SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
+            )
+            surface_anchor = _sample_legal_anchor(
+                rng, surface_corners, context.max_radius_m
+            )
+
+            snapshot_code_state(context)
+            baseline_path = generate_original_baseline(context)
+            single = freeze_point_scenario(
+                context, multi=False, anchor_offset_m=single_anchor
+            )
+            run_one_scenario(context, single, baseline_path)
+            multiple = freeze_point_scenario(
+                context, multi=True, anchor_offset_m=multi_anchor
+            )
+            run_one_scenario(context, multiple, baseline_path)
+            surface = freeze_surface_scenario(
+                context, anchor_offset_m=surface_anchor
+            )
+            run_one_scenario(context, surface, baseline_path)
+            scenarios = (single, multiple, surface)
+            generate_combined_outputs(context, scenarios)
+
+            anchors = {
+                single.scenario_id: single_anchor,
+                multiple.scenario_id: multi_anchor,
+                surface.scenario_id: surface_anchor,
+            }
+            scenario_by_id = {scenario.scenario_id: scenario for scenario in scenarios}
+            for row in _read_csv(FINAL_ROOT / "combined" / "final_summary.csv"):
+                scenario = scenario_by_id[row["scenario"]]
+                anchor = anchors[scenario.scenario_id]
+                aggregate.append(
+                    {
+                        "trial_id": trial_id,
+                        "trial_seed": trial_seed,
+                        "planner_seed": PLANNER_SEED,
+                        "radiation_anchor_x_m": context.search_center[0] + anchor[0],
+                        "radiation_anchor_y_m": context.search_center[1] + anchor[1],
+                        "radiation_positions_m": json.dumps(scenario.source_positions_m),
+                        **row,
+                    }
+                )
+    finally:
+        FINAL_ROOT = canonical_root
+    _csv(REPEATED_ROOT / "repeated_trials_summary.csv", aggregate)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "phase",
-        choices=("preflight", "baseline", "single", "multi", "surface", "combined", "all"),
+        choices=(
+            "preflight", "baseline", "single", "multi", "surface", "combined",
+            "all", "repeated-smoke", "repeated",
+        ),
         nargs="?",
         default="all",
     )
     args = parser.parse_args()
+    if args.phase == "repeated-smoke":
+        run_spatial_repeated_trials(TRIAL_SEEDS[:2])
+        return
+    if args.phase == "repeated":
+        run_spatial_repeated_trials(TRIAL_SEEDS)
+        return
     context = load_frozen_context()
     baseline_path = FINAL_ROOT / "baseline_original" / "simulation" / "mission_steps.csv"
     if args.phase in ("preflight", "all"):

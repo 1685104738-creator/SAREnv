@@ -1,0 +1,16 @@
+{
+  "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+  "outputs": {
+    "mission_steps_csv": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\repeated_spatial_trials\\trial_01_seed_101\\baseline_original\\simulation\\mission_steps.csv",
+    "resolved_parameters_json": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\repeated_spatial_trials\\trial_01_seed_101\\baseline_original\\simulation\\resolved_parameters.json",
+    "trajectory_png": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\repeated_spatial_trials\\trial_01_seed_101\\baseline_original\\simulation\\trajectory.png"
+  },
+  "planner": "Original Greedy",
+  "radiation_blind": true,
+  "route_sha256": "576d389db13f60cb4b38266cae8f7c963b35ff1ee7f1c866b622c678ad850312",
+  "status": "COMPLETE",
+  "survivors_sha256": "652c1bf882d7f537664edec320d40b4b9fe791a9901d666c8643c4978d05f17e",
+  "total_executed_moves": 3600,
+  "total_executed_nodes": 3601,
+  "total_route_distance_m": 87209.92201030577
+}

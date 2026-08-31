@@ -1,0 +1,95 @@
+{
+  "all_survivors": {
+    "excess_exposure_distance_integral": {
+      "count": 100,
+      "max": 9702.476637791027,
+      "mean": 266.85123137764054,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 99.73886404534346,
+      "p95": 245.36440918386936,
+      "sum": 26685.123137764054
+    },
+    "pre_discovery_excess_dose": {
+      "count": 100,
+      "max": 0.2695132399386396,
+      "mean": 0.00741253420493446,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 0.0027705240012595406,
+      "p95": 0.006815678032885259,
+      "sum": 0.741253420493446
+    },
+    "pre_discovery_total_dose": {
+      "count": 100,
+      "max": 0.2695132399386396,
+      "mean": 0.00741253420493446,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 0.0027705240012595406,
+      "p95": 0.006815678032885259,
+      "sum": 0.741253420493446
+    },
+    "total_exposure_distance_integral": {
+      "count": 100,
+      "max": 9702.476637791027,
+      "mean": 266.85123137764054,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 99.73886404534346,
+      "p95": 245.36440918386936,
+      "sum": 26685.123137764054
+    }
+  },
+  "distance_integral_unit": "uGy/h*m",
+  "found_count": 92,
+  "found_fraction": 0.92,
+  "found_survivors_only": {
+    "excess_exposure_distance_integral": {
+      "count": 92,
+      "max": 9702.476637791027,
+      "mean": 283.7720364707796,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 87.77194427149851,
+      "p95": 219.95498698319957,
+      "sum": 26107.027355311722
+    },
+    "pre_discovery_excess_dose": {
+      "count": 92,
+      "max": 0.2695132399386396,
+      "mean": 0.007882556568632767,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 0.002438109563097181,
+      "p95": 0.006109860749533322,
+      "sum": 0.7251952043142145
+    },
+    "pre_discovery_total_dose": {
+      "count": 92,
+      "max": 0.2695132399386396,
+      "mean": 0.007882556568632767,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 0.002438109563097181,
+      "p95": 0.006109860749533322,
+      "sum": 0.7251952043142145
+    },
+    "total_exposure_distance_integral": {
+      "count": 92,
+      "max": 9702.476637791027,
+      "mean": 283.7720364707796,
+      "median": 0.0,
+      "min": 0.0,
+      "p90": 87.77194427149851,
+      "p95": 219.95498698319957,
+      "sum": 26107.027355311722
+    }
+  },
+  "main_population": "all_survivors_including_mission_end_censored_non_discoveries",
+  "not_found_count": 8,
+  "radiation_dose_unit": "uGy",
+  "radiation_quantity": "collision_air_kerma_rate",
+  "radiation_rate_unit": "uGy/h",
+  "total_survivor_count": 100
+}

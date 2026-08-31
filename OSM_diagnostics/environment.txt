@@ -1,0 +1,63 @@
+SAREnv OSM diagnostics environment
+
+Task-start observation (captured by the first read-only shell command,
+before OSM_diagnostics existed and before the external branch switch):
+git branch: main
+git HEAD: 0f2d344d17c0b9c18cec2176dd9b171beba727d6
+git status --short:
+?? examples/radiation/
+?? examples/sarenv_dataset/
+?? results/evaluation/
+?? results/final_experiment/
+?? results/radiation_aware_adaptive_entry/
+?? results/radiation_aware_full/
+
+State when this environment file was generated (after external switch):
+git branch: radiation-evaluation
+git HEAD: c3e200464f54b13be90f206e10e212eeff1d32b3
+git status --short, excluding this new OSM_diagnostics directory:
+ D examples/sarenv_dataset/features.geojson
+ D examples/sarenv_dataset/heatmap.npy
+git status --short, raw at capture time:
+ D examples/sarenv_dataset/features.geojson
+ D examples/sarenv_dataset/heatmap.npy
+?? OSM_diagnostics/
+
+Python version: 3.12.10 (3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)])
+Python executable: D:\MSc_Dissertation\01_Code\SAREnv\.venv\Scripts\python.exe
+sarenv module path: D:\MSc_Dissertation\01_Code\SAREnv\sarenv\__init__.py
+sarenv query module path: D:\MSc_Dissertation\01_Code\SAREnv\sarenv\io\osm_query.py
+osmnx version: 2.1.0
+geopandas version: 1.1.3
+shapely version: 2.1.2
+pyproj version: 3.7.2
+
+ox.settings.overpass_url: https://overpass-api.de/api
+ox.settings.requests_timeout: 180
+ox.settings.use_cache: True
+ox.settings.cache_folder: ./cache
+ox.settings.overpass_rate_limit: True
+ox.settings.overpass_settings: [out:json][timeout:{timeout}]{maxsize}
+
+query_features signature: (area_geopolygon: sarenv.core.geometries.GeoPolygon, tags_to_query: dict) -> dict | None
+query API calls found in sarenv/io/osm_query.py:
+- shapely.intersection keyword_args=[]
+- log.info keyword_args=[]
+- log.error keyword_args=[]
+- log.info keyword_args=[]
+- log.info keyword_args=[]
+- area_geopolygon.get_geometry keyword_args=[]
+- log.info keyword_args=[]
+- tags_to_query.keys keyword_args=[]
+- log.info keyword_args=[]
+- ox.features_from_polygon keyword_args=['tags']
+- area_geopolygon.get_geometry keyword_args=[]
+- log.warning keyword_args=[]
+- time.sleep keyword_args=[]
+- log.error keyword_args=[]
+- tags_to_query.keys keyword_args=[]
+- log.error keyword_args=[]
+- shapely.intersection keyword_args=[]
+- raw_osm_geometries_gdf[osm_key].notna keyword_args=[]
+- area_geopolygon.get_geometry keyword_args=[]
+expected production call: ox.features_from_polygon(..., tags=tags_to_query)

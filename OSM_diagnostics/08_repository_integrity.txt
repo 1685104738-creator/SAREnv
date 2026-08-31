@@ -1,0 +1,41 @@
+FINAL REPOSITORY INTEGRITY CAPTURE
+
+branch (exit 0): radiation-evaluation
+HEAD (exit 0): c3e200464f54b13be90f206e10e212eeff1d32b3
+
+git status --short (exit 0):
+ D examples/sarenv_dataset/features.geojson
+ D examples/sarenv_dataset/heatmap.npy
+?? OSM_diagnostics/
+
+git diff --check (exit 0):
+(no whitespace errors)
+
+protected Bristol Small file fingerprints (read-only final state):
+[
+  {
+    "path": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m\\features.geojson",
+    "exists": true,
+    "size_bytes": 500147,
+    "modified_time": 1787668974.1700783,
+    "sha256": "0b30a476d1b818e27b8fb21797ac8b313b2c681640b78e8573e2753477035677"
+  },
+  {
+    "path": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m\\heatmap.npy",
+    "exists": true,
+    "size_bytes": 28928,
+    "modified_time": 1787668974.1711583,
+    "sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac"
+  },
+  {
+    "path": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m\\metadata.json",
+    "exists": true,
+    "size_bytes": 718,
+    "modified_time": 1787668974.1727872,
+    "sha256": "03ee535b1a8c38479ca70fee7c237657b0882ac7cd103fbaf4b8b34e4837826c"
+  }
+]
+
+Scope note: task began on main@0f2d344d17c0b9c18cec2176dd9b171beba727d6.
+The worktree externally switched branches during Probe 3; no diagnostic command performed checkout.
+All diagnostic writes are under OSM_diagnostics/.

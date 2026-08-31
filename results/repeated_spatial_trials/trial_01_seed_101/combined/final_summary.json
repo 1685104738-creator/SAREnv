@@ -1,0 +1,652 @@
+{
+  "cross_scenario_radiation_unit_warning": "Point scenarios use uSv/h synthetic gamma dose rate; Surface uses uGy/h collision air kerma. Absolute radiation values are not compared across those unit contracts.",
+  "paired_comparisons": {
+    "final_three_point_stress_scenario": {
+      "metrics": [
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.0947964553597006,
+          "metric": "sar_likelihood_score",
+          "original": 0.9357528759397921,
+          "radiation_aware": 0.8409564205800915,
+          "relative_change_percent": -10.130501096723316,
+          "unit": "probability"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.02187356064592373,
+          "metric": "sar_time_discounted_score",
+          "original": 0.13976034472876997,
+          "radiation_aware": 0.11788678408284624,
+          "relative_change_percent": -15.65076323214092,
+          "unit": "score"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -9.0,
+          "metric": "survivors_found",
+          "original": 92.0,
+          "radiation_aware": 83.0,
+          "relative_change_percent": -9.782608695652174,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.10718903958096748,
+          "metric": "covered_area",
+          "original": 1.0613814965225454,
+          "radiation_aware": 0.954192456941578,
+          "relative_change_percent": -10.099011517739475,
+          "unit": "km^2"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -422.4978336571221,
+          "metric": "route_distance",
+          "original": 87209.92201030577,
+          "radiation_aware": 86787.42417664865,
+          "relative_change_percent": -0.4844607401520147,
+          "unit": "m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 22681.550879817558,
+          "metric": "uav_excess_exposure_distance_integral",
+          "original": 73584.54354404069,
+          "radiation_aware": 96266.09442385825,
+          "relative_change_percent": 30.823797753454222,
+          "unit": "uSv/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 22597.05131308346,
+          "metric": "uav_total_exposure_distance_integral",
+          "original": 91026.5279461033,
+          "radiation_aware": 113623.57925918676,
+          "relative_change_percent": 24.82468772890376,
+          "unit": "uSv/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.6300430799949321,
+          "metric": "uav_cumulative_excess_dose",
+          "original": 2.0440150984455747,
+          "radiation_aware": 2.674058178440507,
+          "relative_change_percent": 30.823797753454222,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.6276958698078738,
+          "metric": "uav_cumulative_total_dose",
+          "original": 2.5285146651695363,
+          "radiation_aware": 3.15621053497741,
+          "relative_change_percent": 24.824687728903758,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 8.471638613486846,
+          "metric": "survivor_total_pre_discovery_dose",
+          "original": 51.49483518649913,
+          "radiation_aware": 59.96647379998598,
+          "relative_change_percent": 16.45143359097095,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.08471638613486843,
+          "metric": "survivor_mean_pre_discovery_dose",
+          "original": 0.5149483518649913,
+          "radiation_aware": 0.5996647379998598,
+          "relative_change_percent": 16.451433590970943,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.20400170838836362,
+          "metric": "survivor_median_pre_discovery_dose",
+          "original": 0.17814406391106652,
+          "radiation_aware": 0.38214577229943014,
+          "relative_change_percent": 114.51501886147933,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.518210240850616,
+          "metric": "survivor_p95_pre_discovery_dose",
+          "original": 2.306159346707096,
+          "radiation_aware": 1.78794910585648,
+          "relative_change_percent": -22.47070401230317,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -1.0701317079160466,
+          "metric": "survivor_max_pre_discovery_dose",
+          "original": 3.967625555844726,
+          "radiation_aware": 2.8974938479286796,
+          "relative_change_percent": -26.971590258552272,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -22.0,
+          "metric": "heading_changes",
+          "original": 2888.0,
+          "radiation_aware": 2866.0,
+          "relative_change_percent": -0.7617728531855956,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 810.0000000051805,
+          "metric": "total_absolute_heading_change",
+          "original": 265725.00000001315,
+          "radiation_aware": 266535.00000001834,
+          "relative_change_percent": 0.3048264182915196,
+          "unit": "deg"
+        }
+      ],
+      "paired_survivor_summary": {
+        "approximately_unchanged_count": 0,
+        "both_unfound_count": 2,
+        "dose_unit": "uSv",
+        "original_unfound_radiation_aware_found_count": 6,
+        "radiation_aware_dose_higher_count": 63,
+        "radiation_aware_dose_lower_count": 37,
+        "radiation_aware_unfound_original_found_count": 15,
+        "survivor_count": 100,
+        "unchanged_tolerance_rule": "max(1e-12, 1e-6 * max(abs(pair doses)))"
+      },
+      "radiation_dose_unit": "uSv",
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "scenario_id": "final_three_point_stress_scenario"
+    },
+    "final_uniform_cs137_surface": {
+      "metrics": [
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.008072081556434574,
+          "metric": "sar_likelihood_score",
+          "original": 0.9357528759397921,
+          "radiation_aware": 0.9276807943833575,
+          "relative_change_percent": -0.8626296283970968,
+          "unit": "probability"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.00028817251028703805,
+          "metric": "sar_time_discounted_score",
+          "original": 0.13976034472876997,
+          "radiation_aware": 0.140048517239057,
+          "relative_change_percent": 0.20619046901056842,
+          "unit": "score"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -6.0,
+          "metric": "survivors_found",
+          "original": 92.0,
+          "radiation_aware": 86.0,
+          "relative_change_percent": -6.521739130434782,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.02138384033967755,
+          "metric": "covered_area",
+          "original": 1.0613814965225454,
+          "radiation_aware": 1.0399976561828679,
+          "relative_change_percent": -2.0147176495669505,
+          "unit": "km^2"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 372.79220615059603,
+          "metric": "route_distance",
+          "original": 87209.92201030577,
+          "radiation_aware": 87582.71421645637,
+          "relative_change_percent": 0.4274653589376475,
+          "unit": "m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 17.56254753111557,
+          "metric": "uav_excess_exposure_distance_integral",
+          "original": 1009.8679027045118,
+          "radiation_aware": 1027.4304502356274,
+          "relative_change_percent": 1.739093547193804,
+          "unit": "uGy/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 17.56254753111557,
+          "metric": "uav_total_exposure_distance_integral",
+          "original": 1009.8679027045118,
+          "radiation_aware": 1027.4304502356274,
+          "relative_change_percent": 1.739093547193804,
+          "unit": "uGy/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.00048784854253098794,
+          "metric": "uav_cumulative_excess_dose",
+          "original": 0.02805188618623644,
+          "radiation_aware": 0.02853973472876743,
+          "relative_change_percent": 1.7390935471938036,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.00048784854253098794,
+          "metric": "uav_cumulative_total_dose",
+          "original": 0.02805188618623644,
+          "radiation_aware": 0.02853973472876743,
+          "relative_change_percent": 1.7390935471938036,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.04707356285395037,
+          "metric": "survivor_total_pre_discovery_dose",
+          "original": 0.741253420493446,
+          "radiation_aware": 0.6941798576394956,
+          "relative_change_percent": -6.3505356673583915,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.0004707356285395042,
+          "metric": "survivor_mean_pre_discovery_dose",
+          "original": 0.00741253420493446,
+          "radiation_aware": 0.006941798576394956,
+          "relative_change_percent": -6.3505356673583995,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.0,
+          "metric": "survivor_median_pre_discovery_dose",
+          "original": 0.0,
+          "radiation_aware": 0.0,
+          "relative_change_percent": null,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.000584566524615247,
+          "metric": "survivor_p95_pre_discovery_dose",
+          "original": 0.006815678032885259,
+          "radiation_aware": 0.006231111508270012,
+          "relative_change_percent": -8.576791946373445,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.04408775832073342,
+          "metric": "survivor_max_pre_discovery_dose",
+          "original": 0.2695132399386396,
+          "radiation_aware": 0.2254254816179062,
+          "relative_change_percent": -16.358290349954952,
+          "unit": "uGy"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 32.0,
+          "metric": "heading_changes",
+          "original": 2888.0,
+          "radiation_aware": 2920.0,
+          "relative_change_percent": 1.10803324099723,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 6885.000000006519,
+          "metric": "total_absolute_heading_change",
+          "original": 265725.00000001315,
+          "radiation_aware": 272610.0000000197,
+          "relative_change_percent": 2.5910245554637985,
+          "unit": "deg"
+        }
+      ],
+      "paired_survivor_summary": {
+        "approximately_unchanged_count": 82,
+        "both_unfound_count": 2,
+        "dose_unit": "uGy",
+        "original_unfound_radiation_aware_found_count": 6,
+        "radiation_aware_dose_higher_count": 6,
+        "radiation_aware_dose_lower_count": 12,
+        "radiation_aware_unfound_original_found_count": 12,
+        "survivor_count": 100,
+        "unchanged_tolerance_rule": "max(1e-12, 1e-6 * max(abs(pair doses)))"
+      },
+      "radiation_dose_unit": "uGy",
+      "radiation_quantity": "collision_air_kerma_rate",
+      "radiation_rate_unit": "uGy/h",
+      "scenario_id": "final_uniform_cs137_surface"
+    },
+    "single_point_formal_first_run": {
+      "metrics": [
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.008736704545318608,
+          "metric": "sar_likelihood_score",
+          "original": 0.9357528759397921,
+          "radiation_aware": 0.9444895804851107,
+          "relative_change_percent": 0.9336551102281349,
+          "unit": "probability"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.00011734067870669551,
+          "metric": "sar_time_discounted_score",
+          "original": 0.13976034472876997,
+          "radiation_aware": 0.13964300405006327,
+          "relative_change_percent": -0.08395849261420767,
+          "unit": "score"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 3.0,
+          "metric": "survivors_found",
+          "original": 92.0,
+          "radiation_aware": 95.0,
+          "relative_change_percent": 3.260869565217391,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.00786038521136101,
+          "metric": "covered_area",
+          "original": 1.0613814965225454,
+          "radiation_aware": 1.0692418817339064,
+          "relative_change_percent": 0.7405805770229048,
+          "unit": "km^2"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -298.2337649450201,
+          "metric": "route_distance",
+          "original": 87209.92201030577,
+          "radiation_aware": 86911.68824536075,
+          "relative_change_percent": -0.3419722871782607,
+          "unit": "m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -6980.675739859689,
+          "metric": "uav_excess_exposure_distance_integral",
+          "original": 18653.496819375614,
+          "radiation_aware": 11672.821079515925,
+          "relative_change_percent": -37.42288005007606,
+          "unit": "uSv/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -7040.322492848951,
+          "metric": "uav_total_exposure_distance_integral",
+          "original": 36095.48122143705,
+          "radiation_aware": 29055.158728588096,
+          "relative_change_percent": -19.504719855813185,
+          "unit": "uSv/h*m"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.1939076594405469,
+          "metric": "uav_cumulative_excess_dose",
+          "original": 0.5181526894271004,
+          "radiation_aware": 0.32424502998655347,
+          "relative_change_percent": -37.42288005007606,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.19556451369024874,
+          "metric": "uav_cumulative_total_dose",
+          "original": 1.0026522561510292,
+          "radiation_aware": 0.8070877424607804,
+          "relative_change_percent": -19.504719855813192,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -180.23085695492864,
+          "metric": "survivor_total_pre_discovery_dose",
+          "original": 209.98357427175412,
+          "radiation_aware": 29.752717316825485,
+          "relative_change_percent": -85.83093110020098,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -1.8023085695492864,
+          "metric": "survivor_mean_pre_discovery_dose",
+          "original": 2.0998357427175414,
+          "radiation_aware": 0.29752717316825483,
+          "relative_change_percent": -85.83093110020098,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": 0.05313678478192542,
+          "metric": "survivor_median_pre_discovery_dose",
+          "original": 0.08144106397461735,
+          "radiation_aware": 0.13457784875654277,
+          "relative_change_percent": 65.2456907960909,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -0.0350706345098688,
+          "metric": "survivor_p95_pre_discovery_dose",
+          "original": 0.6160865126925754,
+          "radiation_aware": 0.5810158781827066,
+          "relative_change_percent": -5.692485355115849,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -133.69315452021456,
+          "metric": "survivor_max_pre_discovery_dose",
+          "original": 141.13573556003809,
+          "radiation_aware": 7.442581039823527,
+          "relative_change_percent": -94.72665019224878,
+          "unit": "uSv"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -12.0,
+          "metric": "heading_changes",
+          "original": 2888.0,
+          "radiation_aware": 2876.0,
+          "relative_change_percent": -0.4155124653739612,
+          "unit": "count"
+        },
+        {
+          "absolute_delta_radiation_aware_minus_original": -2384.9999999961583,
+          "metric": "total_absolute_heading_change",
+          "original": 265725.00000001315,
+          "radiation_aware": 263340.000000017,
+          "relative_change_percent": -0.8975444538511771,
+          "unit": "deg"
+        }
+      ],
+      "paired_survivor_summary": {
+        "approximately_unchanged_count": 16,
+        "both_unfound_count": 1,
+        "dose_unit": "uSv",
+        "original_unfound_radiation_aware_found_count": 7,
+        "radiation_aware_dose_higher_count": 54,
+        "radiation_aware_dose_lower_count": 30,
+        "radiation_aware_unfound_original_found_count": 4,
+        "survivor_count": 100,
+        "unchanged_tolerance_rule": "max(1e-12, 1e-6 * max(abs(pair doses)))"
+      },
+      "radiation_dose_unit": "uSv",
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "scenario_id": "single_point_formal_first_run"
+    }
+  },
+  "rows": [
+    {
+      "planner": "Original",
+      "radiation_dose_unit": "uSv",
+      "radiation_episodes": 0,
+      "radiation_priority_decisions": 0,
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "radiation_steps": 0,
+      "route_distance_m": 87209.92201030577,
+      "route_distance_relative_change_percent_vs_original": null,
+      "sar_likelihood_score": 0.9357528759397921,
+      "sar_likelihood_score_relative_change_percent_vs_original": null,
+      "sar_time_discounted_score": 0.13976034472876997,
+      "sar_time_discounted_score_relative_change_percent_vs_original": null,
+      "scenario": "single_point_formal_first_run",
+      "scenario_type": "point_only",
+      "survivor_max_pre_discovery_dose": 141.13573556003809,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_mean_pre_discovery_dose": 2.0998357427175414,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_median_pre_discovery_dose": 0.08144106397461735,
+      "survivor_p95_pre_discovery_dose": 0.6160865126925754,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_total_pre_discovery_dose": 209.98357427175412,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivors_found": 92,
+      "survivors_found_relative_change_percent_vs_original": null,
+      "uav_cumulative_excess_dose": 0.5181526894271004,
+      "uav_cumulative_total_dose": 1.0026522561510292,
+      "uav_excess_exposure_distance_integral": 18653.496819375614,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": null,
+      "uav_total_exposure_distance_integral": 36095.48122143705,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": null
+    },
+    {
+      "planner": "Radiation-aware",
+      "radiation_dose_unit": "uSv",
+      "radiation_episodes": 7,
+      "radiation_priority_decisions": 355,
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "radiation_steps": 383,
+      "route_distance_m": 86911.68824536075,
+      "route_distance_relative_change_percent_vs_original": -0.3419722871782607,
+      "sar_likelihood_score": 0.9444895804851107,
+      "sar_likelihood_score_relative_change_percent_vs_original": 0.9336551102281349,
+      "sar_time_discounted_score": 0.13964300405006327,
+      "sar_time_discounted_score_relative_change_percent_vs_original": -0.08395849261420767,
+      "scenario": "single_point_formal_first_run",
+      "scenario_type": "point_only",
+      "survivor_max_pre_discovery_dose": 7.442581039823527,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": -94.72665019224878,
+      "survivor_mean_pre_discovery_dose": 0.29752717316825483,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": -85.83093110020098,
+      "survivor_median_pre_discovery_dose": 0.13457784875654277,
+      "survivor_p95_pre_discovery_dose": 0.5810158781827066,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": -5.692485355115849,
+      "survivor_total_pre_discovery_dose": 29.752717316825485,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": -85.83093110020098,
+      "survivors_found": 95,
+      "survivors_found_relative_change_percent_vs_original": 3.260869565217391,
+      "uav_cumulative_excess_dose": 0.32424502998655347,
+      "uav_cumulative_total_dose": 0.8070877424607804,
+      "uav_excess_exposure_distance_integral": 11672.821079515925,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": -37.42288005007606,
+      "uav_total_exposure_distance_integral": 29055.158728588096,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": -19.504719855813185
+    },
+    {
+      "planner": "Original",
+      "radiation_dose_unit": "uSv",
+      "radiation_episodes": 0,
+      "radiation_priority_decisions": 0,
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "radiation_steps": 0,
+      "route_distance_m": 87209.92201030577,
+      "route_distance_relative_change_percent_vs_original": null,
+      "sar_likelihood_score": 0.9357528759397921,
+      "sar_likelihood_score_relative_change_percent_vs_original": null,
+      "sar_time_discounted_score": 0.13976034472876997,
+      "sar_time_discounted_score_relative_change_percent_vs_original": null,
+      "scenario": "final_three_point_stress_scenario",
+      "scenario_type": "multi_point",
+      "survivor_max_pre_discovery_dose": 3.967625555844726,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_mean_pre_discovery_dose": 0.5149483518649913,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_median_pre_discovery_dose": 0.17814406391106652,
+      "survivor_p95_pre_discovery_dose": 2.306159346707096,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_total_pre_discovery_dose": 51.49483518649913,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivors_found": 92,
+      "survivors_found_relative_change_percent_vs_original": null,
+      "uav_cumulative_excess_dose": 2.0440150984455747,
+      "uav_cumulative_total_dose": 2.5285146651695363,
+      "uav_excess_exposure_distance_integral": 73584.54354404069,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": null,
+      "uav_total_exposure_distance_integral": 91026.5279461033,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": null
+    },
+    {
+      "planner": "Radiation-aware",
+      "radiation_dose_unit": "uSv",
+      "radiation_episodes": 1,
+      "radiation_priority_decisions": 1046,
+      "radiation_quantity": "synthetic_gamma_dose_rate",
+      "radiation_rate_unit": "uSv/h",
+      "radiation_steps": 3600,
+      "route_distance_m": 86787.42417664865,
+      "route_distance_relative_change_percent_vs_original": -0.4844607401520147,
+      "sar_likelihood_score": 0.8409564205800915,
+      "sar_likelihood_score_relative_change_percent_vs_original": -10.130501096723316,
+      "sar_time_discounted_score": 0.11788678408284624,
+      "sar_time_discounted_score_relative_change_percent_vs_original": -15.65076323214092,
+      "scenario": "final_three_point_stress_scenario",
+      "scenario_type": "multi_point",
+      "survivor_max_pre_discovery_dose": 2.8974938479286796,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": -26.971590258552272,
+      "survivor_mean_pre_discovery_dose": 0.5996647379998598,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": 16.451433590970943,
+      "survivor_median_pre_discovery_dose": 0.38214577229943014,
+      "survivor_p95_pre_discovery_dose": 1.78794910585648,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": -22.47070401230317,
+      "survivor_total_pre_discovery_dose": 59.96647379998598,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": 16.45143359097095,
+      "survivors_found": 83,
+      "survivors_found_relative_change_percent_vs_original": -9.782608695652174,
+      "uav_cumulative_excess_dose": 2.674058178440507,
+      "uav_cumulative_total_dose": 3.15621053497741,
+      "uav_excess_exposure_distance_integral": 96266.09442385825,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": 30.823797753454222,
+      "uav_total_exposure_distance_integral": 113623.57925918676,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": 24.82468772890376
+    },
+    {
+      "planner": "Original",
+      "radiation_dose_unit": "uGy",
+      "radiation_episodes": 0,
+      "radiation_priority_decisions": 0,
+      "radiation_quantity": "collision_air_kerma_rate",
+      "radiation_rate_unit": "uGy/h",
+      "radiation_steps": 0,
+      "route_distance_m": 87209.92201030577,
+      "route_distance_relative_change_percent_vs_original": null,
+      "sar_likelihood_score": 0.9357528759397921,
+      "sar_likelihood_score_relative_change_percent_vs_original": null,
+      "sar_time_discounted_score": 0.13976034472876997,
+      "sar_time_discounted_score_relative_change_percent_vs_original": null,
+      "scenario": "final_uniform_cs137_surface",
+      "scenario_type": "surface_only",
+      "survivor_max_pre_discovery_dose": 0.2695132399386396,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_mean_pre_discovery_dose": 0.00741253420493446,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_median_pre_discovery_dose": 0.0,
+      "survivor_p95_pre_discovery_dose": 0.006815678032885259,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivor_total_pre_discovery_dose": 0.741253420493446,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": null,
+      "survivors_found": 92,
+      "survivors_found_relative_change_percent_vs_original": null,
+      "uav_cumulative_excess_dose": 0.02805188618623644,
+      "uav_cumulative_total_dose": 0.02805188618623644,
+      "uav_excess_exposure_distance_integral": 1009.8679027045118,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": null,
+      "uav_total_exposure_distance_integral": 1009.8679027045118,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": null
+    },
+    {
+      "planner": "Radiation-aware",
+      "radiation_dose_unit": "uGy",
+      "radiation_episodes": 18,
+      "radiation_priority_decisions": 38,
+      "radiation_quantity": "collision_air_kerma_rate",
+      "radiation_rate_unit": "uGy/h",
+      "radiation_steps": 104,
+      "route_distance_m": 87582.71421645637,
+      "route_distance_relative_change_percent_vs_original": 0.4274653589376475,
+      "sar_likelihood_score": 0.9276807943833575,
+      "sar_likelihood_score_relative_change_percent_vs_original": -0.8626296283970968,
+      "sar_time_discounted_score": 0.140048517239057,
+      "sar_time_discounted_score_relative_change_percent_vs_original": 0.20619046901056842,
+      "scenario": "final_uniform_cs137_surface",
+      "scenario_type": "surface_only",
+      "survivor_max_pre_discovery_dose": 0.2254254816179062,
+      "survivor_max_pre_discovery_dose_relative_change_percent_vs_original": -16.358290349954952,
+      "survivor_mean_pre_discovery_dose": 0.006941798576394956,
+      "survivor_mean_pre_discovery_dose_relative_change_percent_vs_original": -6.3505356673583995,
+      "survivor_median_pre_discovery_dose": 0.0,
+      "survivor_p95_pre_discovery_dose": 0.006231111508270012,
+      "survivor_p95_pre_discovery_dose_relative_change_percent_vs_original": -8.576791946373445,
+      "survivor_total_pre_discovery_dose": 0.6941798576394956,
+      "survivor_total_pre_discovery_dose_relative_change_percent_vs_original": -6.3505356673583915,
+      "survivors_found": 86,
+      "survivors_found_relative_change_percent_vs_original": -6.521739130434782,
+      "uav_cumulative_excess_dose": 0.02853973472876743,
+      "uav_cumulative_total_dose": 0.02853973472876743,
+      "uav_excess_exposure_distance_integral": 1027.4304502356274,
+      "uav_excess_exposure_distance_integral_relative_change_percent_vs_original": 1.739093547193804,
+      "uav_total_exposure_distance_integral": 1027.4304502356274,
+      "uav_total_exposure_distance_integral_relative_change_percent_vs_original": 1.739093547193804
+    }
+  ]
+}
