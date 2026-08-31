@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from functools import cached_property
 import math
 from pathlib import Path
 
@@ -88,11 +89,11 @@ class ExecutedTrajectory:
             previous_cumulative = node.cumulative_distance_m
             previous_xy = (node.x_m, node.y_m)
 
-    @property
+    @cached_property
     def coordinates(self) -> tuple[tuple[float, float], ...]:
         return tuple((node.x_m, node.y_m) for node in self.nodes)
 
-    @property
+    @cached_property
     def line(self) -> LineString:
         coordinates = self.coordinates
         if len(coordinates) == 1:
@@ -119,6 +120,51 @@ class ExecutedTrajectory:
             first = self.nodes[0]
             return Point(first.x_m, first.y_m)
         return self.line.interpolate(clipped)
+
+    def sample_coordinates(self, distances_m: np.ndarray) -> np.ndarray:
+        """Interpolate many route distances without changing path semantics."""
+        distances = np.asarray(distances_m, dtype=float)
+        if distances.ndim != 1:
+            raise ValueError("distances_m must be a one-dimensional array.")
+        if not np.isfinite(distances).all():
+            raise ValueError("distances_m must contain only finite values.")
+        if distances.size == 0:
+            return np.empty((0, 2), dtype=float)
+
+        coordinates = np.asarray(self.coordinates, dtype=float)
+        if self.total_distance_m == 0.0 or coordinates.shape[0] == 1:
+            return np.repeat(coordinates[:1], distances.size, axis=0)
+
+        segment_vectors = np.diff(coordinates, axis=0)
+        segment_lengths = np.hypot(
+            segment_vectors[:, 0],
+            segment_vectors[:, 1],
+        )
+        cumulative_lengths = np.concatenate(
+            (np.asarray([0.0]), np.cumsum(segment_lengths))
+        )
+        clipped = np.clip(distances, 0.0, self.total_distance_m)
+        # ``LineString.interpolate`` clamps to the geometry length.  Preserve that
+        # behaviour when the saved cumulative distance differs by round-off only.
+        clipped = np.minimum(clipped, cumulative_lengths[-1])
+        segment_indices = np.searchsorted(
+            cumulative_lengths,
+            clipped,
+            side="right",
+        ) - 1
+        segment_indices = np.clip(segment_indices, 0, segment_lengths.size - 1)
+
+        selected_lengths = segment_lengths[segment_indices]
+        offsets = clipped - cumulative_lengths[segment_indices]
+        fractions = np.divide(
+            offsets,
+            selected_lengths,
+            out=np.zeros_like(offsets),
+            where=selected_lengths > 0.0,
+        )
+        return coordinates[segment_indices] + (
+            fractions[:, np.newaxis] * segment_vectors[segment_indices]
+        )
 
 
 def load_executed_trajectory(path: str | Path) -> ExecutedTrajectory:

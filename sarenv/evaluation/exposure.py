@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import hashlib
 import math
 from typing import Callable
 
@@ -59,6 +60,88 @@ class RouteRadiationIntegral:
     @property
     def total_distance_integral_uSv_h_m(self) -> float:
         return float(self.cumulative_total_integral_uSv_h_m[-1])
+
+
+@dataclass(frozen=True)
+class RouteIntegrationSamples:
+    """One reusable in-memory resampling of a trajectory for route integration."""
+
+    distances_m: np.ndarray
+    sampled_xy_m: np.ndarray
+    trajectory_coordinate_sha256: str
+    trajectory_total_distance_m: float
+    integration_step_m: float
+
+    def __post_init__(self) -> None:
+        distances = np.asarray(self.distances_m, dtype=float)
+        sampled_xy = np.asarray(self.sampled_xy_m, dtype=float)
+        if distances.ndim != 1:
+            raise ValueError("distances_m must be one-dimensional.")
+        if sampled_xy.shape != (distances.size, 2):
+            raise ValueError("sampled_xy_m must have shape (len(distances_m), 2).")
+        if not np.isfinite(distances).all() or not np.isfinite(sampled_xy).all():
+            raise ValueError("Route integration samples must be finite.")
+        if not self.trajectory_coordinate_sha256:
+            raise ValueError("trajectory_coordinate_sha256 must be non-empty.")
+        if (
+            not math.isfinite(self.trajectory_total_distance_m)
+            or self.trajectory_total_distance_m < 0.0
+        ):
+            raise ValueError("trajectory_total_distance_m must be finite and non-negative.")
+        if not math.isfinite(self.integration_step_m) or self.integration_step_m <= 0.0:
+            raise ValueError("integration_step_m must be finite and positive.")
+
+        # The cache is computational state, not an output.  Make accidental
+        # mutation fail instead of silently changing later scenario evaluations.
+        distances.setflags(write=False)
+        sampled_xy.setflags(write=False)
+        object.__setattr__(self, "distances_m", distances)
+        object.__setattr__(self, "sampled_xy_m", sampled_xy)
+
+
+def _trajectory_coordinate_sha256(trajectory: ExecutedTrajectory) -> str:
+    coordinates = np.ascontiguousarray(trajectory.coordinates, dtype=np.float64)
+    digest = hashlib.sha256()
+    digest.update(np.asarray(coordinates.shape, dtype=np.int64).tobytes())
+    digest.update(coordinates.tobytes())
+    return digest.hexdigest()
+
+
+def prepare_route_integration_samples(
+    trajectory: ExecutedTrajectory,
+    *,
+    integration_step_m: float = 1.0,
+) -> RouteIntegrationSamples:
+    """Expand one route once at the evaluator's existing sample distances."""
+    distances = _sample_distances(trajectory.total_distance_m, integration_step_m)
+    return RouteIntegrationSamples(
+        distances_m=distances,
+        sampled_xy_m=trajectory.sample_coordinates(distances),
+        trajectory_coordinate_sha256=_trajectory_coordinate_sha256(trajectory),
+        trajectory_total_distance_m=trajectory.total_distance_m,
+        integration_step_m=float(integration_step_m),
+    )
+
+
+def _validate_route_integration_samples(
+    samples: RouteIntegrationSamples,
+    trajectory: ExecutedTrajectory,
+    integration_step_m: float,
+) -> None:
+    if not isinstance(samples, RouteIntegrationSamples):
+        raise TypeError("route_samples must be a RouteIntegrationSamples instance.")
+    if samples.integration_step_m != float(integration_step_m):
+        raise ValueError("Cached route samples use a different integration step.")
+    if samples.trajectory_total_distance_m != trajectory.total_distance_m:
+        raise ValueError("Cached route samples use a different trajectory distance.")
+    if samples.trajectory_coordinate_sha256 != _trajectory_coordinate_sha256(trajectory):
+        raise ValueError("Cached route samples belong to a different trajectory.")
+    expected_distances = _sample_distances(
+        trajectory.total_distance_m,
+        integration_step_m,
+    )
+    if not np.array_equal(samples.distances_m, expected_distances):
+        raise ValueError("Cached route sample distances do not match _sample_distances().")
 
 
 @dataclass(frozen=True)
@@ -165,6 +248,7 @@ def integrate_radiation_along_route(
     background_rate: float | None = None,
     contract: RadiationQuantityContract = DEFAULT_USV_CONTRACT,
     integration_step_m: float = 1.0,
+    route_samples: RouteIntegrationSamples | None = None,
 ) -> RouteRadiationIntegral:
     """Integrate static radiation truth over distance using trapezoidal sampling."""
     if not callable(excess_truth_query):
@@ -174,14 +258,22 @@ def integrate_radiation_along_route(
     background_value = _resolve_background(background_uSv_h, background_rate)
     if not isinstance(contract, RadiationQuantityContract):
         raise TypeError("contract must be a RadiationQuantityContract.")
-    distances = _sample_distances(
-        trajectory.total_distance_m,
-        integration_step_m,
-    )
+    if route_samples is None:
+        route_samples = prepare_route_integration_samples(
+            trajectory,
+            integration_step_m=integration_step_m,
+        )
+    else:
+        _validate_route_integration_samples(
+            route_samples,
+            trajectory,
+            integration_step_m,
+        )
+    distances = route_samples.distances_m
+    sampled_coordinates = route_samples.sampled_xy_m
     excess_values = np.empty(distances.size, dtype=float)
-    for index, distance_m in enumerate(distances):
-        point = trajectory.interpolate(float(distance_m))
-        value = float(excess_truth_query(point.x, point.y, query_height_m))
+    for index, (x_m, y_m) in enumerate(sampled_coordinates):
+        value = float(excess_truth_query(float(x_m), float(y_m), query_height_m))
         if not math.isfinite(value) or value < 0.0:
             raise ValueError("Radiation truth must return finite non-negative excess.")
         excess_values[index] = value
@@ -417,5 +509,7 @@ __all__ = [
     "dose_from_distance_integral",
     "evaluate_survivor_radiation",
     "integrate_radiation_along_route",
+    "prepare_route_integration_samples",
+    "RouteIntegrationSamples",
     "summarise_survivor_radiation",
 ]

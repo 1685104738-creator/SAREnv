@@ -9,11 +9,13 @@ from .evaluator import (
 from .exposure import (
     DEFAULT_USV_CONTRACT,
     RadiationQuantityContract,
+    RouteIntegrationSamples,
     RouteRadiationIntegral,
     SurvivorRadiationRecord,
     dose_from_distance_integral,
     evaluate_survivor_radiation,
     integrate_radiation_along_route,
+    prepare_route_integration_samples,
     summarise_survivor_radiation,
 )
 from .surface_truth import SurfaceKermaTruthField
@@ -34,6 +36,7 @@ __all__ = [
     "PostRunEvaluationResult",
     "PostRunEvaluator",
     "RadiationQuantityContract",
+    "RouteIntegrationSamples",
     "RouteRadiationIntegral",
     "SurvivorDiscovery",
     "SurvivorRadiationRecord",
@@ -46,6 +49,7 @@ __all__ = [
     "evaluate_survivor_radiation",
     "first_discovery_distance_m",
     "integrate_radiation_along_route",
+    "prepare_route_integration_samples",
     "load_executed_trajectory",
     "summarise_survivor_radiation",
 ]

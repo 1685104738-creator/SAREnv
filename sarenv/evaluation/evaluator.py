@@ -26,6 +26,7 @@ from .exposure import (
     DEFAULT_USV_CONTRACT,
     RadiationQuantityContract,
     RadiationTruthQuery,
+    RouteIntegrationSamples,
     RouteRadiationIntegral,
     SurvivorRadiationRecord,
     dose_from_distance_integral,
@@ -63,6 +64,9 @@ class EvaluationConfig:
     evaluation_speed_m_s: float | None = None
     speed_status: str = "not_provided"
     sar_discount_factor: float = 0.999
+    write_detail_outputs: bool = True
+    write_cumulative_metrics: bool = True
+    generate_figures: bool = True
 
     def __post_init__(self) -> None:
         numeric_positive = {
@@ -88,6 +92,13 @@ class EvaluationConfig:
             raise ValueError("evaluation_speed_m_s must be finite and positive.")
         if not 0.0 < self.sar_discount_factor <= 1.0:
             raise ValueError("sar_discount_factor must lie in (0, 1].")
+        for name in (
+            "write_detail_outputs",
+            "write_cumulative_metrics",
+            "generate_figures",
+        ):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be a boolean.")
 
     @property
     def detection_radius_m(self) -> float:
@@ -237,6 +248,7 @@ class PostRunEvaluator:
         excess_truth_query: RadiationTruthQuery,
         source_position_m: tuple[float, float] | None = None,
         source_positions_m: tuple[tuple[float, float], ...] | None = None,
+        route_integration_samples: RouteIntegrationSamples | None = None,
     ) -> None:
         if not isinstance(config, EvaluationConfig):
             raise TypeError("config must be an EvaluationConfig.")
@@ -244,6 +256,7 @@ class PostRunEvaluator:
             raise TypeError("excess_truth_query must be callable.")
         self.config = config
         self.excess_truth_query = excess_truth_query
+        self.route_integration_samples = route_integration_samples
         if source_positions_m is not None and source_position_m is not None:
             raise ValueError("Use source_position_m or source_positions_m, not both.")
         self.source_positions_m = (
@@ -295,6 +308,7 @@ class PostRunEvaluator:
             background_rate=config.resolved_background_rate,
             contract=config.radiation_contract,
             integration_step_m=config.radiation_integration_step_m,
+            route_samples=self.route_integration_samples,
         )
         uav_summary = self._uav_summary(uav_integral)
         survivor_records = evaluate_survivor_radiation(
@@ -311,7 +325,12 @@ class PostRunEvaluator:
         turn_diagnostics = calculate_turn_diagnostics(trajectory)
 
         output_directory = config.output_directory.resolve()
-        output_directory.mkdir(parents=True, exist_ok=True)
+        if (
+            config.write_detail_outputs
+            or config.write_cumulative_metrics
+            or config.generate_figures
+        ):
+            output_directory.mkdir(parents=True, exist_ok=True)
         paths = self._output_paths(output_directory)
         parameters = self._evaluation_parameters(
             trajectory,
@@ -333,59 +352,62 @@ class PostRunEvaluator:
             "evaluation_parameters": parameters,
         }
 
-        _write_json(paths["sar_metrics_json"], sar_metrics)
-        _write_json(paths["uav_radiation_summary_json"], uav_summary)
-        _write_json(paths["survivor_radiation_summary_json"], survivor_summary)
-        _write_json(paths["evaluation_parameters_json"], parameters)
-        _write_json(paths["evaluation_summary_json"], evaluation_summary)
-        _write_csv(
-            paths["survivor_radiation_csv"],
-            [record.to_dict() for record in survivor_records],
-        )
-        self._write_cumulative_curves(
-            paths["cumulative_metrics_csv"],
-            uav_integral,
-            discoveries,
-            sar_curve_distances,
-            sar_curve_probability,
-        )
-        truth_grid = self._truth_visualisation_grid(
-            tuple(float(value) for value in item.bounds),
-            config.survivor_reference_height_m,
-        )
-        self._plot_evaluation_overview(
-            paths["evaluation_trajectory_overview_png"],
-            trajectory,
-            item,
-            survivors,
-            discoveries,
-        )
-        self._plot_uav_radiation_route(
-            paths["uav_route_radiation_truth_png"],
-            trajectory,
-            item,
-            uav_integral,
-            truth_grid,
-        )
-        self._plot_survivor_dose(
-            paths["survivor_pre_discovery_radiation_png"],
-            item,
-            survivor_records,
-            truth_grid,
-        )
-        self._plot_survivor_discovery(
-            paths["survivor_discovery_distance_png"],
-            item,
-            survivor_records,
-            truth_grid,
-        )
-        self._plot_cumulative_curves(
-            paths["cumulative_curves_png"],
-            uav_integral,
-            discoveries,
-            sar_curve_distances,
-            sar_curve_probability,
-        )
+        if config.write_detail_outputs:
+            _write_json(paths["sar_metrics_json"], sar_metrics)
+            _write_json(paths["uav_radiation_summary_json"], uav_summary)
+            _write_json(paths["survivor_radiation_summary_json"], survivor_summary)
+            _write_json(paths["evaluation_parameters_json"], parameters)
+            _write_json(paths["evaluation_summary_json"], evaluation_summary)
+            _write_csv(
+                paths["survivor_radiation_csv"],
+                [record.to_dict() for record in survivor_records],
+            )
+        if config.write_cumulative_metrics:
+            self._write_cumulative_curves(
+                paths["cumulative_metrics_csv"],
+                uav_integral,
+                discoveries,
+                sar_curve_distances,
+                sar_curve_probability,
+            )
+        if config.generate_figures:
+            truth_grid = self._truth_visualisation_grid(
+                tuple(float(value) for value in item.bounds),
+                config.survivor_reference_height_m,
+            )
+            self._plot_evaluation_overview(
+                paths["evaluation_trajectory_overview_png"],
+                trajectory,
+                item,
+                survivors,
+                discoveries,
+            )
+            self._plot_uav_radiation_route(
+                paths["uav_route_radiation_truth_png"],
+                trajectory,
+                item,
+                uav_integral,
+                truth_grid,
+            )
+            self._plot_survivor_dose(
+                paths["survivor_pre_discovery_radiation_png"],
+                item,
+                survivor_records,
+                truth_grid,
+            )
+            self._plot_survivor_discovery(
+                paths["survivor_discovery_distance_png"],
+                item,
+                survivor_records,
+                truth_grid,
+            )
+            self._plot_cumulative_curves(
+                paths["cumulative_curves_png"],
+                uav_integral,
+                discoveries,
+                sar_curve_distances,
+                sar_curve_probability,
+            )
         return PostRunEvaluationResult(
             evaluation_summary=evaluation_summary,
             sar_metrics=sar_metrics,

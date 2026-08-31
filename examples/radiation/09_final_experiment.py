@@ -51,10 +51,13 @@ from sarenv.analytics.route_execution import (
 )
 from sarenv.evaluation import (
     EvaluationConfig,
+    PostRunEvaluationResult,
     PostRunEvaluator,
     RadiationQuantityContract,
+    RouteIntegrationSamples,
     SurfaceKermaTruthField,
     load_executed_trajectory,
+    prepare_route_integration_samples,
 )
 from sarenv.radiation import (
     GridSpec,
@@ -163,6 +166,20 @@ class FrozenRadiationScenario:
     truth_query_total: TruthQuery
     source_positions_m: tuple[tuple[float, float], ...]
     config: dict[str, object]
+
+
+@dataclass(frozen=True)
+class RadiationAwareMissionResult:
+    trajectory_path: Path
+    summary: dict[str, object]
+
+
+@dataclass(frozen=True)
+class ScenarioRunResult:
+    scenario: FrozenRadiationScenario
+    aware_mission: RadiationAwareMissionResult
+    original_evaluation: PostRunEvaluationResult
+    aware_evaluation: PostRunEvaluationResult
 
 
 def _sha256(path: Path) -> str:
@@ -411,7 +428,11 @@ def _plot_route(
     plt.close(figure)
 
 
-def generate_original_baseline(context: FrozenContext) -> Path:
+def generate_original_baseline(
+    context: FrozenContext,
+    *,
+    minimal_output: bool = False,
+) -> Path:
     simulation_directory = FINAL_ROOT / "baseline_original" / "simulation"
     simulation_directory.mkdir(parents=True, exist_ok=True)
     route = generate_greedy_path(
@@ -457,6 +478,8 @@ def generate_original_baseline(context: FrozenContext) -> Path:
         previous = point
     trajectory_path = simulation_directory / "mission_steps.csv"
     _csv(trajectory_path, records)
+    if minimal_output:
+        return trajectory_path
     resolved = {
         **_common_parameters(context),
         "scenario_id": "radiation_blind_original_greedy_baseline",
@@ -611,6 +634,7 @@ def freeze_surface_scenario(
     context: FrozenContext,
     *,
     anchor_offset_m: tuple[float, float] = (0.0, 0.0),
+    save_truth_outputs: bool = True,
 ) -> FrozenRadiationScenario:
     center_x = context.search_center[0] + anchor_offset_m[0]
     center_y = context.search_center[1] + anchor_offset_m[1]
@@ -643,16 +667,17 @@ def freeze_surface_scenario(
         platform_altitude_m=PLATFORM_ALTITUDE_M,
     )
     scenario_directory = FINAL_ROOT / "03_uniform_surface"
-    truth_directory = scenario_directory / "truth"
-    save_surface_simulation(result, truth_directory / "ground_1m")
-    np.save(
-        truth_directory / "platform_collision_air_kerma_rate_50m.npy",
-        truth.platform_patch.collision_air_kerma_rate_uGy_h,
-    )
-    _json(
-        truth_directory / "platform_collision_air_kerma_rate_50m_meta.json",
-        truth.platform_patch.metadata,
-    )
+    if save_truth_outputs:
+        truth_directory = scenario_directory / "truth"
+        save_surface_simulation(result, truth_directory / "ground_1m")
+        np.save(
+            truth_directory / "platform_collision_air_kerma_rate_50m.npy",
+            truth.platform_patch.collision_air_kerma_rate_uGy_h,
+        )
+        _json(
+            truth_directory / "platform_collision_air_kerma_rate_50m_meta.json",
+            truth.platform_patch.metadata,
+        )
     config = {
         **_common_parameters(context),
         "scenario_id": "final_uniform_cs137_surface",
@@ -729,7 +754,9 @@ def freeze_surface_scenario(
 def run_radiation_aware_mission(
     context: FrozenContext,
     scenario: FrozenRadiationScenario,
-) -> Path:
+    *,
+    minimal_output: bool = False,
+) -> RadiationAwareMissionResult:
     started = time.perf_counter()
     output_directory = FINAL_ROOT / scenario.directory_name / "radiation_aware" / "simulation"
     output_directory.mkdir(parents=True, exist_ok=True)
@@ -971,27 +998,28 @@ def run_radiation_aware_mission(
 
     mission_steps_path = output_directory / "mission_steps.csv"
     _csv(mission_steps_path, steps)
-    _csv(output_directory / "mode_events.csv", events)
-    _csv(output_directory / "radiation_measurements.csv", measurements)
-    _csv(output_directory / "candidate_decisions.csv", candidates)
-    np.savez_compressed(
-        output_directory / "estimated_radiation_grid.npz",
-        mean=np.asarray(estimator.mean),
-        weight_sum=np.asarray(estimator.weight_sum),
-        observed_mask=np.asarray(estimator.observed_mask),
-        bounds=np.asarray(estimator.grid.bounds),
-        resolution_m=estimator.grid.resolution_m,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
-        quantity=scenario.measurement_quantity,
-        unit=scenario.contract.rate_unit,
-    )
-    _plot_route(
-        output_directory / "trajectory.png",
-        context,
-        steps,
-        title=f"FINAL Radiation-aware: {scenario.scenario_id}",
-        source_positions=scenario.source_positions_m,
-    )
+    if not minimal_output:
+        _csv(output_directory / "mode_events.csv", events)
+        _csv(output_directory / "radiation_measurements.csv", measurements)
+        _csv(output_directory / "candidate_decisions.csv", candidates)
+        np.savez_compressed(
+            output_directory / "estimated_radiation_grid.npz",
+            mean=np.asarray(estimator.mean),
+            weight_sum=np.asarray(estimator.weight_sum),
+            observed_mask=np.asarray(estimator.observed_mask),
+            bounds=np.asarray(estimator.grid.bounds),
+            resolution_m=estimator.grid.resolution_m,
+            value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+            quantity=scenario.measurement_quantity,
+            unit=scenario.contract.rate_unit,
+        )
+        _plot_route(
+            output_directory / "trajectory.png",
+            context,
+            steps,
+            title=f"FINAL Radiation-aware: {scenario.scenario_id}",
+            source_positions=scenario.source_positions_m,
+        )
 
     enter_events = [
         event for event in events if event["transition_reason"] == "hazard_enter_threshold"
@@ -1025,8 +1053,8 @@ def run_radiation_aware_mission(
         "old_debug_crop_used": False,
         "conditional_probability_renormalisation_used": False,
     }
-    resolved_path = output_directory / "resolved_parameters.json"
-    _json(resolved_path, resolved)
+    if not minimal_output:
+        _json(output_directory / "resolved_parameters.json", resolved)
     summary = {
         "status": "COMPLETE" if controller.is_complete else "INCOMPLETE",
         "scenario_id": scenario.scenario_id,
@@ -1068,8 +1096,12 @@ def run_radiation_aware_mission(
         "heatmap_sha256": context.heatmap_sha256,
         "survivors_sha256": context.survivor_sha256,
     }
-    _json(output_directory / "summary.json", summary)
-    return mission_steps_path
+    if not minimal_output:
+        _json(output_directory / "summary.json", summary)
+    return RadiationAwareMissionResult(
+        trajectory_path=mission_steps_path,
+        summary=summary,
+    )
 
 
 def evaluate_route(
@@ -1078,7 +1110,9 @@ def evaluate_route(
     *,
     planner_name: str,
     trajectory_path: Path,
-) -> None:
+    minimal_output: bool = False,
+    route_integration_samples: RouteIntegrationSamples | None = None,
+) -> PostRunEvaluationResult:
     output_directory = (
         FINAL_ROOT / scenario.directory_name / planner_name / "evaluation"
     )
@@ -1101,11 +1135,15 @@ def evaluate_route(
             radiation_integration_step_m=RADIATION_INTEGRATION_STEP_M,
             evaluation_speed_m_s=EVALUATION_SPEED_M_S,
             speed_status=EVALUATION_SPEED_STATUS,
+            write_detail_outputs=not minimal_output,
+            write_cumulative_metrics=not minimal_output,
+            generate_figures=not minimal_output,
         ),
         excess_truth_query=scenario.truth_query_excess,
         source_positions_m=scenario.source_positions_m,
+        route_integration_samples=route_integration_samples,
     )
-    evaluator.evaluate()
+    return evaluator.evaluate()
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -1654,6 +1692,71 @@ def _comparison_figures(
     plt.close(figure)
 
 
+def _minimal_trajectory_comparison_figure(
+    context: FrozenContext,
+    scenario: FrozenRadiationScenario,
+    aware_trajectory_path: Path,
+    output_path: Path,
+) -> None:
+    original_trajectory = load_executed_trajectory(
+        FINAL_ROOT / "baseline_original" / "simulation" / "mission_steps.csv"
+    )
+    aware_trajectory = load_executed_trajectory(aware_trajectory_path)
+    x_values, y_values, truth = _truth_grid(context, scenario)
+    positive = truth[truth > 0.0]
+    contour_levels = None
+    if positive.size and positive.max() > positive.min():
+        contour_levels = np.geomspace(
+            max(float(np.percentile(positive, 10)), 1e-12),
+            float(positive.max()),
+            5,
+        )
+
+    figure, axes = plt.subplots(1, 2, figsize=(16, 7.5), constrained_layout=True)
+    for axis, trajectory, title in (
+        (axes[0], original_trajectory, "Original Greedy"),
+        (axes[1], aware_trajectory, "Radiation-aware Greedy"),
+    ):
+        image = axis.imshow(
+            context.probability_map,
+            origin="lower",
+            extent=(
+                context.bounds[0],
+                context.bounds[2],
+                context.bounds[1],
+                context.bounds[3],
+            ),
+            cmap="YlOrRd",
+            vmin=0.0,
+            vmax=float(context.probability_map.max()),
+        )
+        if contour_levels is not None:
+            axis.contour(
+                x_values,
+                y_values,
+                truth,
+                levels=contour_levels,
+                colors="black",
+                linewidths=0.55,
+                alpha=0.55,
+            )
+        _draw_route(axis, trajectory)
+        axis.scatter(
+            [point.x for point in context.survivors.points],
+            [point.y for point in context.survivors.points],
+            s=9,
+            c="purple",
+            alpha=0.55,
+        )
+        _draw_truth_sources(axis, scenario)
+        _format_axis(axis, context, title)
+    figure.colorbar(image, ax=axes, label="SAR probability per cell", shrink=0.8)
+    figure.suptitle(f"{scenario.scenario_id}: frozen paired trajectories")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=190)
+    plt.close(figure)
+
+
 def generate_comparison(
     context: FrozenContext,
     scenario: FrozenRadiationScenario,
@@ -1690,17 +1793,12 @@ def generate_comparison(
     return metrics
 
 
-def _summary_row(
+def _summary_row_from_payloads(
     scenario: FrozenRadiationScenario,
     planner: str,
+    evaluation: dict[str, object],
+    simulation: dict[str, object],
 ) -> dict[str, object]:
-    root = FINAL_ROOT / scenario.directory_name
-    evaluation = _read_json(root / planner / "evaluation" / "evaluation_summary.json")
-    simulation = (
-        _read_json(root / "radiation_aware" / "simulation" / "summary.json")
-        if planner == "radiation_aware"
-        else _read_json(FINAL_ROOT / "baseline_original" / "simulation" / "summary.json")
-    )
     survivor_distribution = _nested(
         evaluation,
         "survivor_radiation",
@@ -1759,6 +1857,25 @@ def _summary_row(
             else 0
         ),
     }
+
+
+def _summary_row(
+    scenario: FrozenRadiationScenario,
+    planner: str,
+) -> dict[str, object]:
+    root = FINAL_ROOT / scenario.directory_name
+    evaluation = _read_json(root / planner / "evaluation" / "evaluation_summary.json")
+    simulation = (
+        _read_json(root / "radiation_aware" / "simulation" / "summary.json")
+        if planner == "radiation_aware"
+        else _read_json(FINAL_ROOT / "baseline_original" / "simulation" / "summary.json")
+    )
+    return _summary_row_from_payloads(
+        scenario,
+        planner,
+        evaluation,
+        simulation,
+    )
 
 
 def generate_combined_outputs(
@@ -1930,6 +2047,77 @@ def generate_combined_outputs(
     _json(combined / "integrity_checks.json", integrity)
 
 
+def generate_minimal_combined_outputs(
+    context: FrozenContext,
+    run_results: tuple[ScenarioRunResult, ...],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    comparisons: dict[str, list[dict[str, object]]] = {}
+    for result in run_results:
+        scenario = result.scenario
+        original = result.original_evaluation.evaluation_summary
+        aware = result.aware_evaluation.evaluation_summary
+        rows.append(
+            _summary_row_from_payloads(
+                scenario,
+                "original",
+                original,
+                {},
+            )
+        )
+        rows.append(
+            _summary_row_from_payloads(
+                scenario,
+                "radiation_aware",
+                aware,
+                result.aware_mission.summary,
+            )
+        )
+        comparisons[scenario.scenario_id] = _comparison_metrics(
+            original,
+            aware,
+            scenario.contract,
+        )
+
+    for row in rows:
+        is_aware = row["planner"] == "Radiation-aware"
+        relative_by_metric = {
+            metric["metric"]: metric["relative_change_percent"]
+            for metric in comparisons[str(row["scenario"])]
+        }
+        for metric_name in (
+            "sar_likelihood_score",
+            "sar_time_discounted_score",
+            "survivors_found",
+            "route_distance",
+            "uav_excess_exposure_distance_integral",
+            "uav_total_exposure_distance_integral",
+            "survivor_total_pre_discovery_dose",
+            "survivor_mean_pre_discovery_dose",
+            "survivor_p95_pre_discovery_dose",
+            "survivor_max_pre_discovery_dose",
+        ):
+            row[f"{metric_name}_relative_change_percent_vs_original"] = (
+                relative_by_metric[metric_name] if is_aware else None
+            )
+
+    combined = FINAL_ROOT / "combined"
+    _csv(combined / "final_summary.csv", rows)
+    figure_names = {
+        "01_single_point": "single_trajectory_comparison.png",
+        "02_multi_point": "multi_trajectory_comparison.png",
+        "03_uniform_surface": "surface_trajectory_comparison.png",
+    }
+    for result in run_results:
+        _minimal_trajectory_comparison_figure(
+            context,
+            result.scenario,
+            result.aware_mission.trajectory_path,
+            combined / "figures" / figure_names[result.scenario.directory_name],
+        )
+    return rows
+
+
 def _record_original_reference(scenario: FrozenRadiationScenario) -> None:
     baseline_summary = _read_json(
         FINAL_ROOT / "baseline_original" / "simulation" / "summary.json"
@@ -1950,22 +2138,40 @@ def run_one_scenario(
     context: FrozenContext,
     scenario: FrozenRadiationScenario,
     baseline_path: Path,
-) -> None:
-    _record_original_reference(scenario)
-    aware_path = run_radiation_aware_mission(context, scenario)
-    evaluate_route(
+    *,
+    minimal_output: bool = False,
+    original_route_integration_samples: RouteIntegrationSamples | None = None,
+) -> ScenarioRunResult:
+    if not minimal_output:
+        _record_original_reference(scenario)
+    aware_mission = run_radiation_aware_mission(
+        context,
+        scenario,
+        minimal_output=minimal_output,
+    )
+    original_evaluation = evaluate_route(
         context,
         scenario,
         planner_name="original",
         trajectory_path=baseline_path,
+        minimal_output=minimal_output,
+        route_integration_samples=original_route_integration_samples,
     )
-    evaluate_route(
+    aware_evaluation = evaluate_route(
         context,
         scenario,
         planner_name="radiation_aware",
-        trajectory_path=aware_path,
+        trajectory_path=aware_mission.trajectory_path,
+        minimal_output=minimal_output,
     )
-    generate_comparison(context, scenario)
+    if not minimal_output:
+        generate_comparison(context, scenario)
+    return ScenarioRunResult(
+        scenario=scenario,
+        aware_mission=aware_mission,
+        original_evaluation=original_evaluation,
+        aware_evaluation=aware_evaluation,
+    )
 
 
 def run_final_experiment() -> None:
@@ -2016,18 +2222,25 @@ def _trial_context(base: FrozenContext, trial_seed: int) -> FrozenContext:
     )
 
 
-def run_spatial_repeated_trials(seeds: tuple[int, ...]) -> None:
-    """Repeat the unchanged complete experiment for seeded spatial realisations."""
+def run_spatial_repeated_trials(
+    seeds: tuple[int, ...],
+    *,
+    trial_id_start: int = 1,
+) -> None:
+    """Run seeded spatial realisations with the minimal repeated-trial output set."""
     global FINAL_ROOT
     if len(set(seeds)) != len(seeds):
         raise ValueError("Trial seeds must be unique.")
+    if trial_id_start <= 0:
+        raise ValueError("trial_id_start must be positive.")
     canonical_root = FINAL_ROOT
     base = load_frozen_context()
     aggregate: list[dict[str, object]] = []
+    original_route_integration_samples: RouteIntegrationSamples | None = None
     try:
-        for trial_id, trial_seed in enumerate(seeds, start=1):
+        for trial_id, trial_seed in enumerate(seeds, start=trial_id_start):
             FINAL_ROOT = REPEATED_ROOT / f"trial_{trial_id:02d}_seed_{trial_seed}"
-            print(f"Trial {trial_id:02d}/{len(seeds)} | seed={trial_seed}", flush=True)
+            print(f"Trial {trial_id:02d} | seed={trial_seed}", flush=True)
             context = _trial_context(base, trial_seed)
             rng = np.random.default_rng(trial_seed)
             single_anchor = _sample_legal_anchor(
@@ -2046,22 +2259,58 @@ def run_spatial_repeated_trials(seeds: tuple[int, ...]) -> None:
                 rng, surface_corners, context.max_radius_m
             )
 
-            snapshot_code_state(context)
-            baseline_path = generate_original_baseline(context)
+            baseline_path = generate_original_baseline(
+                context,
+                minimal_output=True,
+            )
+            if original_route_integration_samples is None:
+                original_route_integration_samples = prepare_route_integration_samples(
+                    load_executed_trajectory(baseline_path),
+                    integration_step_m=RADIATION_INTEGRATION_STEP_M,
+                )
             single = freeze_point_scenario(
                 context, multi=False, anchor_offset_m=single_anchor
             )
-            run_one_scenario(context, single, baseline_path)
+            single_result = run_one_scenario(
+                context,
+                single,
+                baseline_path,
+                minimal_output=True,
+                original_route_integration_samples=(
+                    original_route_integration_samples
+                ),
+            )
             multiple = freeze_point_scenario(
                 context, multi=True, anchor_offset_m=multi_anchor
             )
-            run_one_scenario(context, multiple, baseline_path)
-            surface = freeze_surface_scenario(
-                context, anchor_offset_m=surface_anchor
+            multiple_result = run_one_scenario(
+                context,
+                multiple,
+                baseline_path,
+                minimal_output=True,
+                original_route_integration_samples=(
+                    original_route_integration_samples
+                ),
             )
-            run_one_scenario(context, surface, baseline_path)
+            surface = freeze_surface_scenario(
+                context,
+                anchor_offset_m=surface_anchor,
+                save_truth_outputs=False,
+            )
+            surface_result = run_one_scenario(
+                context,
+                surface,
+                baseline_path,
+                minimal_output=True,
+                original_route_integration_samples=(
+                    original_route_integration_samples
+                ),
+            )
             scenarios = (single, multiple, surface)
-            generate_combined_outputs(context, scenarios)
+            rows = generate_minimal_combined_outputs(
+                context,
+                (single_result, multiple_result, surface_result),
+            )
 
             anchors = {
                 single.scenario_id: single_anchor,
@@ -2069,7 +2318,7 @@ def run_spatial_repeated_trials(seeds: tuple[int, ...]) -> None:
                 surface.scenario_id: surface_anchor,
             }
             scenario_by_id = {scenario.scenario_id: scenario for scenario in scenarios}
-            for row in _read_csv(FINAL_ROOT / "combined" / "final_summary.csv"):
+            for row in rows:
                 scenario = scenario_by_id[row["scenario"]]
                 anchor = anchors[scenario.scenario_id]
                 aggregate.append(
@@ -2101,7 +2350,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.phase == "repeated-smoke":
-        run_spatial_repeated_trials(TRIAL_SEEDS[:2])
+        run_spatial_repeated_trials(TRIAL_SEEDS[1:2], trial_id_start=2)
         return
     if args.phase == "repeated":
         run_spatial_repeated_trials(TRIAL_SEEDS)

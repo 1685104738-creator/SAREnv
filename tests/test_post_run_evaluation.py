@@ -17,7 +17,9 @@ from sarenv.evaluation import (
     evaluate_survivor_radiation,
     first_discovery_distance_m,
     integrate_radiation_along_route,
+    prepare_route_integration_samples,
 )
+from sarenv.evaluation.exposure import _sample_distances
 from sarenv.radiation import GridSpec
 from sarenv.radiation.surface import (
     SurfacePhotonResponseConfig,
@@ -47,6 +49,123 @@ def _trajectory(x_coordinates=(0.0, 10.0)):
         )
         previous = x_m
     return ExecutedTrajectory(tuple(nodes))
+
+
+def _polyline_trajectory(coordinates):
+    nodes = []
+    cumulative = 0.0
+    previous = None
+    for index, (x_m, y_m) in enumerate(coordinates):
+        segment = 0.0 if previous is None else float(
+            np.hypot(x_m - previous[0], y_m - previous[1])
+        )
+        cumulative += segment
+        nodes.append(
+            TrajectoryNode(
+                step_index=index,
+                x_m=float(x_m),
+                y_m=float(y_m),
+                mode="NORMAL",
+                segment_distance_m=segment,
+                cumulative_distance_m=cumulative,
+            )
+        )
+        previous = (x_m, y_m)
+    return ExecutedTrajectory(tuple(nodes))
+
+
+def test_vectorised_sampler_matches_shapely_at_existing_sample_distances():
+    trajectory = _polyline_trajectory(
+        ((0.0, 0.0), (3.0, 4.0), (3.0, 4.0), (9.0, 4.0), (9.0, 1.0))
+    )
+    distances = _sample_distances(trajectory.total_distance_m, 1.0)
+
+    actual = trajectory.sample_coordinates(distances)
+    expected = np.asarray(
+        [
+            trajectory.line.interpolate(float(distance_m)).coords[0]
+            for distance_m in distances
+        ],
+        dtype=float,
+    )
+
+    np.testing.assert_array_equal(distances, _sample_distances(14.0, 1.0))
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=1e-12)
+
+
+def test_vectorised_sampler_preserves_clipping_and_zero_length_route():
+    trajectory = _polyline_trajectory(((2.0, 3.0), (2.0, 3.0)))
+
+    actual = trajectory.sample_coordinates(
+        np.asarray([-5.0, 0.0, 10.0], dtype=float)
+    )
+
+    np.testing.assert_array_equal(
+        actual,
+        np.asarray(((2.0, 3.0), (2.0, 3.0), (2.0, 3.0))),
+    )
+
+
+def test_trajectory_shapely_geometry_is_cached():
+    trajectory = _trajectory()
+
+    assert trajectory.line is trajectory.line
+    assert trajectory.coordinates is trajectory.coordinates
+
+
+def test_route_integration_samples_are_reused_without_resampling(monkeypatch):
+    trajectory = _polyline_trajectory(((0.0, 0.0), (3.0, 4.0), (9.0, 4.0)))
+    calls = {"count": 0}
+    original = ExecutedTrajectory.sample_coordinates
+
+    def counted_sample_coordinates(self, distances_m):
+        calls["count"] += 1
+        return original(self, distances_m)
+
+    monkeypatch.setattr(
+        ExecutedTrajectory,
+        "sample_coordinates",
+        counted_sample_coordinates,
+    )
+    samples = prepare_route_integration_samples(
+        trajectory,
+        integration_step_m=1.0,
+    )
+    first = integrate_radiation_along_route(
+        trajectory,
+        lambda x_m, y_m, z_m: x_m + y_m,
+        query_height_m=50.0,
+        background_rate=0.2,
+        route_samples=samples,
+    )
+    second = integrate_radiation_along_route(
+        trajectory,
+        lambda x_m, y_m, z_m: x_m + y_m,
+        query_height_m=50.0,
+        background_rate=0.2,
+        route_samples=samples,
+    )
+
+    assert calls["count"] == 1
+    np.testing.assert_array_equal(first.distances_m, samples.distances_m)
+    np.testing.assert_array_equal(second.excess_rates_uSv_h, first.excess_rates_uSv_h)
+    assert not samples.distances_m.flags.writeable
+    assert not samples.sampled_xy_m.flags.writeable
+
+
+def test_route_integration_cache_rejects_a_different_trajectory():
+    first = _trajectory((0.0, 10.0))
+    second = _polyline_trajectory(((0.0, 0.0), (6.0, 8.0)))
+    samples = prepare_route_integration_samples(first, integration_step_m=1.0)
+
+    with pytest.raises(ValueError, match="different trajectory"):
+        integrate_radiation_along_route(
+            second,
+            lambda x_m, y_m, z_m: 1.0,
+            query_height_m=50.0,
+            background_rate=0.2,
+            route_samples=samples,
+        )
 
 
 def test_first_discovery_uses_exact_segment_entry_not_only_waypoints():

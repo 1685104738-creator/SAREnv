@@ -1,0 +1,104 @@
+{
+  "activity_density_bq_m2": 1000000.0,
+  "altitude_correction_assumption": "perfect_ground_equivalent_scalar",
+  "background_rate": 0.0,
+  "background_unit": "uGy/h",
+  "base_hazard_reference": 10.0,
+  "camera_detection_radius_m": 20.71067811865475,
+  "candidate_radiation_aggregation": "strict_max_over_overlapping_radiation_grid_cells",
+  "configuration_anchor_offset_m": [
+    264.74525401908033,
+    222.6742454857872
+  ],
+  "configuration_rule": "trial-seed centre translation with fixed rectangle shape and orientation",
+  "confirmation_samples": 1,
+  "dataset_bounds_projected": [
+    522370.9204974669,
+    5696374.290406497,
+    523570.920497467,
+    5697574.290406496
+  ],
+  "dataset_crs": "EPSG:32630",
+  "dataset_size": "small",
+  "distance_budget_m": null,
+  "evaluation_speed_m_s": 10.0,
+  "evaluation_speed_status": "provisional",
+  "fov_deg": 45.0,
+  "gaussian_sigma_m": 15.0,
+  "gaussian_update_radius_m": 45.0,
+  "ground_max_excess_rate": 1.8191733316042091,
+  "ground_truth_plane_height_m": 1.0,
+  "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+  "hysteresis_margin": 0.1,
+  "initial_entry_multiplier": 0.01,
+  "initial_entry_threshold": 0.1,
+  "measurement_quantity": "ground_equivalent_excess_collision_air_kerma_rate",
+  "minimum_raw_ground_fft_before_clipping": 337.22045190377855,
+  "minimum_raw_platform_fft_before_clipping": 320.57432732548654,
+  "mission_completion_rule": "all_searchable_cells_covered_or_native_greedy_move_ceiling",
+  "native_mission_move_allowance": 3600,
+  "patch_bounds": [
+    522935.0,
+    5696926.0,
+    523536.0,
+    5697467.0
+  ],
+  "patch_padding_m": 200.0,
+  "patch_shape": [
+    541,
+    601
+  ],
+  "planner_seed": 42,
+  "platform_altitude_m": 50.0,
+  "platform_evaluation_plane_height_m": 50.0,
+  "platform_max_excess_rate": 0.176811328012699,
+  "platform_plane_method": "same production activity raster, Cs-137 gamma yield, inverse-square air-attenuated kernel and fluence-to-air-kerma conversion; only observation height changed in R",
+  "polygon_bounds": [
+    523135.665751486,
+    5697126.964651983,
+    523335.665751486,
+    5697266.964651983
+  ],
+  "polygon_exterior_coordinates": [
+    [
+      523335.665751486,
+      5697126.964651983
+    ],
+    [
+      523335.665751486,
+      5697266.964651983
+    ],
+    [
+      523135.665751486,
+      5697266.964651983
+    ],
+    [
+      523135.665751486,
+      5697126.964651983
+    ],
+    [
+      523335.665751486,
+      5697126.964651983
+    ]
+  ],
+  "radiation_dose_unit": "uGy",
+  "radiation_integration_step_m": 1.0,
+  "radiation_quantity": "collision_air_kerma_rate",
+  "radiation_rate_unit": "uGy/h",
+  "radiation_resolution_m": 1.0,
+  "radionuclide": "Cs-137",
+  "sar_probability_sum": 1.0,
+  "sar_resolution_m": 20.0,
+  "sar_shape": [
+    60,
+    60
+  ],
+  "scenario_id": "final_uniform_cs137_surface",
+  "scenario_type": "surface_only",
+  "surface_hazard_reference_native_unit": "uGy/h",
+  "surface_hazard_reference_native_value": 10.0,
+  "surface_type": "uniform_polygon",
+  "survivors_sha256": "e958c708fbe8d25ecce9bccd7915cb6395f7a34493ca78c9a92a6b19050933f4",
+  "uGy_to_uSv_conversion_applied": false,
+  "value_reference_height_m": 1.0
+}
