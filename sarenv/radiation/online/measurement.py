@@ -8,7 +8,12 @@ import math
 
 @dataclass(frozen=True, init=False)
 class RadiationMeasurement:
-    """One scalar observation with separate platform and value-reference heights."""
+    """One scalar observation whose value is measured at platform height.
+
+    ``value_reference_height_m`` remains explicit in saved contracts, but it
+    must equal ``platform_altitude_m``.  This prevents reintroducing the former
+    perfect ground-equivalent UAV measurement path.
+    """
 
     x_m: float
     y_m: float
@@ -77,6 +82,15 @@ class RadiationMeasurement:
             raise ValueError("platform_altitude_m must be non-negative.")
         if self.value_reference_height_m < 0.0:
             raise ValueError("value_reference_height_m must be non-negative.")
+        if not math.isclose(
+            self.value_reference_height_m,
+            self.platform_altitude_m,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "Radiation values must be referenced to the platform altitude."
+            )
         if self.simulated_time_s < 0.0:
             raise ValueError("simulated_time_s must be non-negative.")
         if self.value < 0.0:

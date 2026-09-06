@@ -1,0 +1,192 @@
+{
+  "altitude_correction": null,
+  "created_utc": "2026-08-31T23:18:20.065113+00:00",
+  "experiment_name": "50 m seed42 radiation parameter sweep",
+  "formal_workflow": "examples\\radiation\\09_final_experiment.py",
+  "frozen_experiment_parameters": {
+    "camera_detection_radius_m": 20.71067811865475,
+    "confirmation_samples": 1,
+    "dataset_bounds_projected": [
+      522370.9204974669,
+      5696374.290406497,
+      523570.920497467,
+      5697574.290406496
+    ],
+    "dataset_crs": "EPSG:32630",
+    "dataset_directory": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m",
+    "dataset_size": "small",
+    "evaluation_speed_m_s": 10.0,
+    "fov_deg": 45.0,
+    "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+    "hysteresis_margin": 0.1,
+    "initial_entry_multiplier": 0.01,
+    "measurement_frequency": "one_noise_free_measurement_per_executed_route_node",
+    "mission_distance_budget_m": null,
+    "mission_step_allowance": 3600,
+    "multi_point_offsets_m": [
+      [
+        -130.0,
+        -190.0
+      ],
+      [
+        220.0,
+        160.0
+      ],
+      [
+        -270.0,
+        230.0
+      ]
+    ],
+    "point_background_uSv_h": 0.2,
+    "point_reference_excess_uSv_h": 20000.0,
+    "point_source_count_multi": 3,
+    "point_source_count_single": 1,
+    "radiation_integration_step_m": 1.0,
+    "radiation_resolution_m": 1.0,
+    "reference_radius_fraction": 0.5,
+    "sar_grid_shape": [
+      60,
+      60
+    ],
+    "sar_probability_sum": 1.0,
+    "sar_resolution_m": 20.0,
+    "single_point_offset_m": [
+      -130.0,
+      -190.0
+    ],
+    "surface_activity_density_bq_m2": 1000000.0,
+    "surface_background_uGy_h": 0.0,
+    "surface_half_height_m": 70.0,
+    "surface_half_width_m": 100.0,
+    "surface_patch_padding_m": 200.0,
+    "survivors_sha256": "a1712e54a475d605c0ed63ce56c05e909df6cfab9ce96b33fe6bd230a6fc2fc8"
+  },
+  "git": {
+    "branch": "measure-of-map",
+    "commit_hash": "1ce95d6580dbae08023f41bc121b0b817ad7a2e0",
+    "working_tree_status": [
+      "M docs/radiation_migration.md",
+      " M examples/radiation/06_full_radiation_aware_simulation.py",
+      " M examples/radiation/08_evaluate_adaptive_0p01x.py",
+      " M examples/radiation/09_final_experiment.py",
+      " M sarenv/evaluation/evaluator.py",
+      " M sarenv/radiation/online/measurement.py",
+      " M sarenv/radiation/online/sensor.py",
+      " M tests/test_final_experiment_minimal_outputs.py",
+      " M tests/test_radiation.py",
+      " M tests/test_radiation_online_contracts.py",
+      " M tests/test_radiation_priority.py",
+      "?? examples/radiation/10_50m_parameter_sweep.py",
+      "?? results/50m_seed42_parameter_sweep/"
+    ]
+  },
+  "measurement_contract": "source-excess at physical 50 m AGL after subtracting unchanged background",
+  "minimal_sweep_wrapper": "examples\\radiation\\10_50m_parameter_sweep.py",
+  "old_seed42_reference": {
+    "branch": "radiation-path-plan",
+    "created_utc": "2026-08-25T12:13:52.954321+00:00",
+    "directory": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\final_experiment",
+    "head": "a53986aebf0952ed393b94fa15f1e2b6d7599123",
+    "planner_seed": 42,
+    "selection_reason": "unique existing formal final_experiment with seed 42, complete Single/Multi/Surface summaries and explicit perfect 1 m sensing metadata",
+    "sensing_contract": "perfect_ground_equivalent_scalar"
+  },
+  "original_baseline": {
+    "computed_once_for_nine_formal_tests": true,
+    "persistent_duplicate_outputs": false,
+    "radiation_blind": true
+  },
+  "seed": 42,
+  "survivor_evaluation_altitude_m": 1.0,
+  "tests": [
+    {
+      "Y": 10.0,
+      "influence_radius_m": 45.0,
+      "sigma_m": 15.0,
+      "test_id": "T01"
+    },
+    {
+      "Y": 10.0,
+      "influence_radius_m": 120.0,
+      "sigma_m": 40.0,
+      "test_id": "T02"
+    },
+    {
+      "Y": 10.0,
+      "influence_radius_m": 150.0,
+      "sigma_m": 50.0,
+      "test_id": "T03"
+    },
+    {
+      "Y": 0.2,
+      "influence_radius_m": 45.0,
+      "sigma_m": 15.0,
+      "test_id": "T04"
+    },
+    {
+      "Y": 0.2,
+      "influence_radius_m": 120.0,
+      "sigma_m": 40.0,
+      "test_id": "T05"
+    },
+    {
+      "Y": 0.2,
+      "influence_radius_m": 150.0,
+      "sigma_m": 50.0,
+      "test_id": "T06"
+    },
+    {
+      "Y": 0.004,
+      "influence_radius_m": 45.0,
+      "sigma_m": 15.0,
+      "test_id": "T07"
+    },
+    {
+      "Y": 0.004,
+      "influence_radius_m": 120.0,
+      "sigma_m": 40.0,
+      "test_id": "T08"
+    },
+    {
+      "Y": 0.004,
+      "influence_radius_m": 150.0,
+      "sigma_m": 50.0,
+      "test_id": "T09"
+    }
+  ],
+  "truth_invariants": {
+    "same_source_configuration_at_both_heights": true,
+    "simple_1m_to_50m_scaling_used": false,
+    "surface_activity_raster_reused_without_modification": true,
+    "surface_kernels_built_independently_for_1m_and_50m": true,
+    "truth_diagnostics": {
+      "Multi": {
+        "grid_resolution_m": 5.0,
+        "peak_ratio_50m_over_1m": 0.005707178757053632,
+        "truth_1m_total_peak": 1818.6144231783746,
+        "truth_50m_total_peak": 10.379157603234964
+      },
+      "Single": {
+        "grid_resolution_m": 5.0,
+        "peak_ratio_50m_over_1m": 0.0055814783665011644,
+        "truth_1m_total_peak": 1818.3818181818183,
+        "truth_50m_total_peak": 10.149258780220872
+      },
+      "Surface": {
+        "grid_resolution_m": 5.0,
+        "peak_ratio_50m_over_1m": 0.09715029625099514,
+        "truth_1m_total_peak": 1.8189823882517588,
+        "truth_50m_total_peak": 0.17671467789400103
+      }
+    }
+  },
+  "uav_altitude_m": 50.0,
+  "uav_estimator_measurement_height_m": 50.0,
+  "uav_exposure_truth_height_m": 50.0,
+  "uav_sensor_truth_height_m": 50.0,
+  "varied_parameters_only": [
+    "Y",
+    "sigma_m",
+    "influence_radius_m"
+  ]
+}

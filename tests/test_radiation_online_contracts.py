@@ -92,18 +92,17 @@ def test_noise_free_sensor_queries_point_truth_at_explicit_altitude() -> None:
     assert measurement.simulated_time_s == 12.5
 
 
-def test_perfect_altitude_correction_returns_one_metre_excess_measurement() -> None:
+def test_sensor_cannot_substitute_ground_truth_for_platform_truth() -> None:
     queried_heights = []
 
     def total_truth(x_m, y_m, height_m):
         queried_heights.append(height_m)
-        return 5.2
+        return 0.2 + height_m
 
     sensor = NoiseFreeRadiationSensor(
         total_truth,
-        quantity="synthetic_excess_gamma_dose_rate",
+        quantity="airborne_excess_gamma_dose_rate",
         unit="uSv/h",
-        value_reference_height_m=1.0,
         background_value_to_subtract=0.2,
     )
 
@@ -114,10 +113,24 @@ def test_perfect_altitude_correction_returns_one_metre_excess_measurement() -> N
         simulated_time_s=3.0,
     )
 
-    assert queried_heights == [1.0]
+    assert queried_heights == [50.0]
     assert measurement.platform_altitude_m == 50.0
-    assert measurement.value_reference_height_m == 1.0
-    assert measurement.value == pytest.approx(5.0)
+    assert measurement.value_reference_height_m == 50.0
+    assert measurement.value == pytest.approx(50.0)
+
+
+def test_measurement_rejects_a_ground_equivalent_reference_height() -> None:
+    with pytest.raises(ValueError, match="platform altitude"):
+        RadiationMeasurement(
+            x_m=10.0,
+            y_m=20.0,
+            platform_altitude_m=50.0,
+            value_reference_height_m=1.0,
+            simulated_time_s=0.0,
+            value=1.0,
+            quantity="airborne_excess_gamma_dose_rate",
+            unit="uSv/h",
+        )
 
 
 def test_noise_free_sensor_preserves_surface_kerma_quantity_and_unit() -> None:

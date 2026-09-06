@@ -64,7 +64,9 @@ def main() -> None:
             scenario_parameters_path=parameters_path,
             output_directory=OUTPUT_DIRECTORY,
             platform_altitude_m=float(parameters["platform_altitude_m"]),
-            survivor_reference_height_m=float(parameters["value_reference_height_m"]),
+            survivor_reference_height_m=float(
+                parameters["survivor_reference_height_m"]
+            ),
             fov_deg=float(parameters["fov_deg"]),
             background_uSv_h=float(parameters["background_uSv_h"]),
             radiation_integration_step_m=RADIATION_INTEGRATION_STEP_M,

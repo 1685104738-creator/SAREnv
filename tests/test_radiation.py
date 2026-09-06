@@ -11,14 +11,14 @@ from shapely.geometry import Polygon, box
 
 from sarenv import DatasetLoader
 from sarenv.radiation import (
-    BenchmarkSurfaceResponseConfig,
-    BenchmarkSurfaceResponseKernel,
     CompositeRadiationField,
     DoseRatePatch,
     GridSpec,
     PointSource,
     PointSourceConfig,
     SurfaceZone,
+    SurfacePhotonResponseConfig,
+    SurfacePhotonResponseKernel,
     UniformPolygonConfig,
     UniformPolygonSource,
     ZonedPolygonConfig,
@@ -34,12 +34,10 @@ from sarenv.radiation import (
 CRS = "EPSG:32630"
 
 
-def _kernel(cutoff: float = 2.0):
-    return BenchmarkSurfaceResponseKernel.create(
-        BenchmarkSurfaceResponseConfig(
-            core_radius_m=1.0,
-            cutoff_radius_m=cutoff,
-        )
+def _kernel(grid: GridSpec, *, observation_height_m: float = 1.0):
+    return SurfacePhotonResponseKernel.create(
+        SurfacePhotonResponseConfig(observation_height_m=observation_height_m),
+        grid,
     )
 
 
@@ -52,7 +50,7 @@ def _uniform(
         UniformPolygonConfig(
             source_id=source_id,
             geometry=geometry,
-            nominal_surface_field_uSv_h=intensity,
+            activity_density_bq_m2=intensity,
             crs=CRS,
         )
     )
@@ -123,44 +121,48 @@ def test_zoned_polygon_last_defined_wins_and_order_is_repeatable():
     assert reverse[2, 2] == 1.0
 
 
-def test_benchmark_kernel_shape_cutoff_normalisation_and_symmetry():
-    kernel = _kernel(cutoff=3.0)
+def test_physical_kernel_shape_no_cutoff_no_normalisation_and_symmetry():
+    grid = GridSpec.from_bounds((0, 0, 4, 4), CRS)
+    kernel = _kernel(grid)
     assert kernel.values.shape == (7, 7)
     assert kernel.center_index == (3, 3)
-    assert np.all(kernel.values >= 0)
-    assert kernel.values[0, 0] == 0.0
+    assert np.all(kernel.values > 0)
+    assert kernel.values[0, 0] > 0.0
     assert kernel.values[3, 3] == kernel.values.max()
-    assert np.isclose(kernel.values.sum(), 1.0, atol=1e-12)
+    assert not np.isclose(kernel.values.sum(), 1.0, atol=1e-12)
     assert np.array_equal(kernel.values, np.flipud(kernel.values))
     assert np.array_equal(kernel.values, np.fliplr(kernel.values))
 
 
-def test_single_pixel_full_convolution_equals_scaled_kernel():
+def test_single_pixel_same_convolution_equals_central_scaled_kernel():
     grid = GridSpec.from_bounds((0, 0, 3, 3), CRS)
     result = simulate_surface_source(
         _uniform(box(1, 1, 2, 2), 6.0),
-        _kernel(cutoff=2.0),
+        _kernel(grid),
         nominal_grid=grid,
     )
-    expected = np.zeros((7, 7))
-    expected[1:6, 1:6] = 6.0 * result.kernel.values
-    assert np.allclose(result.dose_rate_patch.excess_uSv_h, expected, atol=1e-12)
+    expected = 6.0 * result.kernel.values[1:4, 1:4]
+    assert np.allclose(
+        result.photon_fluence_rate_patch.photon_fluence_rate,
+        expected,
+        atol=1e-12,
+    )
 
 
-def test_large_uniform_area_preserves_centre_and_has_external_tail():
+def test_large_uniform_area_has_positive_edge_and_higher_centre():
+    grid = GridSpec.from_bounds((0, 0, 21, 21), CRS)
     source = _uniform(box(0, 0, 21, 21), 10.0)
-    result = simulate_surface_source(source, _kernel(cutoff=3.0))
-    patch = result.dose_rate_patch
-    assert patch.query_excess_dose_rate(10.5, 10.5, method="nearest") == pytest.approx(10.0)
-    edge = patch.query_excess_dose_rate(0.5, 10.5, method="nearest")
-    tail = patch.query_excess_dose_rate(-0.5, 10.5, method="nearest")
-    assert 0.0 < tail < edge < 10.0
-    assert patch.query_excess_dose_rate(-3.1, 10.5) == 0.0
+    result = simulate_surface_source(source, _kernel(grid), nominal_grid=grid)
+    patch = result.collision_air_kerma_rate_patch
+    centre = patch.query_collision_air_kerma_rate(10.5, 10.5, method="nearest")
+    edge = patch.query_collision_air_kerma_rate(0.5, 10.5, method="nearest")
+    assert 0.0 < edge < centre
+    assert patch.query_collision_air_kerma_rate(-0.5, 10.5) == 0.0
 
 
 def test_surface_simulation_linearity_and_intensity_scaling():
     grid = GridSpec.from_bounds((0, 0, 5, 5), CRS)
-    kernel = _kernel()
+    kernel = _kernel(grid)
     result_a = simulate_surface_source(
         _uniform(box(0, 0, 5, 5), 2.0, "a"), kernel, nominal_grid=grid
     )
@@ -174,13 +176,13 @@ def test_surface_simulation_linearity_and_intensity_scaling():
         _uniform(box(0, 0, 5, 5), 4.0, "double"), kernel, nominal_grid=grid
     )
     assert np.allclose(
-        result_sum.dose_rate_patch.excess_uSv_h,
-        result_a.dose_rate_patch.excess_uSv_h
-        + result_b.dose_rate_patch.excess_uSv_h,
+        result_sum.photon_fluence_rate_patch.photon_fluence_rate,
+        result_a.photon_fluence_rate_patch.photon_fluence_rate
+        + result_b.photon_fluence_rate_patch.photon_fluence_rate,
     )
     assert np.allclose(
-        result_double.dose_rate_patch.excess_uSv_h,
-        2.0 * result_a.dose_rate_patch.excess_uSv_h,
+        result_double.photon_fluence_rate_patch.photon_fluence_rate,
+        2.0 * result_a.photon_fluence_rate_patch.photon_fluence_rate,
     )
 
 
@@ -208,29 +210,36 @@ def test_fft_convolution_matches_direct_reference_sum():
         SurfaceZone("d", box(1, 1, 2, 2), 4.0),
     )
     source = ZonedPolygonSource(ZonedPolygonConfig("small", zones, CRS))
+    grid = GridSpec.from_bounds((0, 0, 2, 2), CRS)
     result = simulate_surface_source(
         source,
-        _kernel(cutoff=1.0),
-        nominal_grid=GridSpec.from_bounds((0, 0, 2, 2), CRS),
+        _kernel(grid),
+        nominal_grid=grid,
     )
-    direct = _direct_full_convolution(
-        result.nominal_surface_field, result.kernel.values
+    direct_full = _direct_full_convolution(
+        result.cell_activity_bq,
+        result.kernel.values,
     )
-    assert np.allclose(result.dose_rate_patch.excess_uSv_h, direct, atol=1e-12)
+    direct_same = direct_full[1:3, 1:3]
+    assert np.allclose(
+        result.photon_fluence_rate_patch.photon_fluence_rate,
+        direct_same,
+        atol=1e-12,
+    )
 
 
-def test_full_convolution_shape_bounds_and_cell_alignment():
+def test_same_convolution_preserves_shape_bounds_and_cell_alignment():
     input_grid = GridSpec.from_bounds((10, 20, 14, 23), CRS)
     result = simulate_surface_source(
         _uniform(box(10, 20, 14, 23), 2.0),
-        _kernel(cutoff=2.0),
+        _kernel(input_grid),
         nominal_grid=input_grid,
     )
-    patch = result.dose_rate_patch
-    assert patch.excess_uSv_h.shape == (7, 8)
-    assert patch.grid.bounds == (8.0, 18.0, 16.0, 25.0)
-    assert patch.grid.row_col_to_world(2, 2) == input_grid.row_col_to_world(0, 0)
-    assert result.dose_rate_metadata["convolution_mode"] == "full"
+    patch = result.collision_air_kerma_rate_patch
+    assert patch.collision_air_kerma_rate_uGy_h.shape == input_grid.shape
+    assert patch.grid.bounds == input_grid.bounds
+    assert patch.grid.row_col_to_world(0, 0) == input_grid.row_col_to_world(0, 0)
+    assert result.photon_fluence_metadata["convolution_mode"] == "same"
 
 
 def test_point_source_is_analytic_excess_only_and_deterministic():
@@ -292,26 +301,32 @@ def test_surface_simulation_and_io_are_fully_deterministic(tmp_path, monkeypatch
         raise AssertionError("Radiation generation must not use random numbers.")
 
     monkeypatch.setattr(np.random, "default_rng", fail_rng)
+    grid = GridSpec.from_bounds((0, 0, 6, 4), CRS)
     source = _uniform(box(0, 0, 6, 4), 8.0)
-    first = simulate_surface_source(source, _kernel())
-    second = simulate_surface_source(source, _kernel())
-    assert np.array_equal(first.nominal_surface_field, second.nominal_surface_field)
+    first = simulate_surface_source(source, _kernel(grid), nominal_grid=grid)
+    second = simulate_surface_source(source, _kernel(grid), nominal_grid=grid)
+    assert np.array_equal(first.activity_density_bq_m2, second.activity_density_bq_m2)
     assert np.array_equal(
-        first.dose_rate_patch.excess_uSv_h,
-        second.dose_rate_patch.excess_uSv_h,
+        first.collision_air_kerma_rate_patch.collision_air_kerma_rate_uGy_h,
+        second.collision_air_kerma_rate_patch.collision_air_kerma_rate_uGy_h,
     )
 
     paths = save_surface_simulation(first, tmp_path / "surface")
-    assert paths.nominal_field.name == "nominal_surface_field.npy"
-    assert paths.dose_rate_patch.name == "dose_rate_patch.npy"
-    loaded = load_surface_simulation(tmp_path / "surface")
-    assert np.array_equal(loaded.nominal_surface_field, first.nominal_surface_field)
-    assert np.array_equal(
-        loaded.dose_rate_patch.excess_uSv_h,
-        first.dose_rate_patch.excess_uSv_h,
+    assert paths.activity_density.name == "activity_density_bq_m2.npy"
+    assert paths.collision_air_kerma_rate.name == (
+        "collision_air_kerma_rate_uGy_h.npy"
     )
-    assert loaded.dose_rate_metadata["background_included"] is False
-    assert loaded.dose_rate_metadata["data_content"] == "source_excess_only"
+    loaded = load_surface_simulation(tmp_path / "surface")
+    assert np.array_equal(
+        loaded.activity_density_bq_m2,
+        first.activity_density_bq_m2,
+    )
+    assert np.array_equal(
+        loaded.collision_air_kerma_rate_patch.collision_air_kerma_rate_uGy_h,
+        first.collision_air_kerma_rate_patch.collision_air_kerma_rate_uGy_h,
+    )
+    assert loaded.metadata["background_included"] is False
+    assert loaded.metadata["dataset_type"] == "physical_surface_radiation"
 
 
 def test_point_source_metadata_round_trip(tmp_path):

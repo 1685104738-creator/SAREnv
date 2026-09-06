@@ -1,0 +1,109 @@
+{
+  "Y_values": [
+    0.004,
+    0.01,
+    0.02,
+    0.05,
+    0.2
+  ],
+  "created_or_updated_utc": "2026-09-01T13:25:37.156979+00:00",
+  "frozen_parameters": {
+    "altitude_correction_assumption": "none_physical_airborne_truth",
+    "camera_detection_radius_m": 20.71067811865475,
+    "candidate_radiation_aggregation": "strict_max_over_overlapping_radiation_grid_cells",
+    "confirmation_samples": 1,
+    "dataset_bounds_projected": [
+      522370.9204974669,
+      5696374.290406497,
+      523570.920497467,
+      5697574.290406496
+    ],
+    "dataset_crs": "EPSG:32630",
+    "dataset_size": "small",
+    "distance_budget_m": null,
+    "evaluation_speed_m_s": 10.0,
+    "evaluation_speed_status": "provisional",
+    "fov_deg": 45.0,
+    "gaussian_sigma_m": 40.0,
+    "gaussian_update_radius_m": 120.0,
+    "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+    "hysteresis_margin": 0.1,
+    "influence_radius_m": 120.0,
+    "initial_entry_multiplier": 0.01,
+    "mission_completion_rule": "all_searchable_cells_covered_or_native_greedy_move_ceiling",
+    "native_mission_move_allowance": 3600,
+    "planner_seed": 42,
+    "platform_altitude_m": 50.0,
+    "radiation_integration_step_m": 1.0,
+    "radiation_resolution_m": 1.0,
+    "sar_probability_sum": 1.0,
+    "sar_resolution_m": 20.0,
+    "sar_shape": [
+      60,
+      60
+    ],
+    "survivor_reference_height_m": 1.0,
+    "survivors_sha256": "a1712e54a475d605c0ed63ce56c05e909df6cfab9ce96b33fe6bd230a6fc2fc8",
+    "uav_measurement_height_m": 50.0
+  },
+  "git_branch": "measure-of-map",
+  "git_commit_hash": "1ce95d6580dbae08023f41bc121b0b817ad7a2e0",
+  "git_worktree_status_at_update": "M docs/radiation_migration.md\n M examples/radiation/06_full_radiation_aware_simulation.py\n M examples/radiation/08_evaluate_adaptive_0p01x.py\n M examples/radiation/09_final_experiment.py\n M sarenv/evaluation/evaluator.py\n M sarenv/radiation/online/measurement.py\n M sarenv/radiation/online/sensor.py\n M tests/test_final_experiment_minimal_outputs.py\n M tests/test_radiation.py\n M tests/test_radiation_online_contracts.py\n M tests/test_radiation_priority.py\n?? examples/radiation/10_50m_parameter_sweep.py\n?? examples/radiation/11_50m_y_sensitivity_20seeds.py\n?? results/50m_Y_sensitivity_20seeds/\n?? results/50m_seed42_parameter_sweep/",
+  "influence_radius_m": 120.0,
+  "original_baseline_policy": "one Original route and one evaluation per morphology per seed, shared by all Y",
+  "purpose": "Y-only sensitivity at physical 50 m UAV radiation sensing",
+  "sanity_check": {
+    "Y": 0.02,
+    "completed_scenarios": [
+      "Single",
+      "Multi",
+      "Surface"
+    ],
+    "discarded": true,
+    "influence_radius_m": 120.0,
+    "runtime_s": 101.50336539998534,
+    "seed": 101,
+    "sigma_m": 40.0,
+    "status": "PASSED",
+    "summary_rows": 3
+  },
+  "scenarios_per_test": [
+    "Single",
+    "Multi",
+    "Surface"
+  ],
+  "seed_source": "examples/radiation/09_final_experiment.py::TRIAL_SEEDS",
+  "seeds": [
+    101,
+    203,
+    307,
+    401,
+    509,
+    601,
+    709,
+    809,
+    907,
+    1009,
+    1103,
+    1201,
+    1307,
+    1409,
+    1511,
+    1601,
+    1709,
+    1801,
+    1907,
+    2003
+  ],
+  "sigma_m": 40.0,
+  "status_counts": {
+    "FAILED": 0,
+    "PENDING": 0,
+    "SUCCESS": 100
+  },
+  "survivor_evaluation_height_m": 1.0,
+  "test_count": 100,
+  "uav_altitude_m": 50.0,
+  "uav_evaluation_height_m": 50.0,
+  "uav_sensing_height_m": 50.0
+}

@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 
-from shapely.geometry import Point
+import numpy as np
 
 from sarenv.evaluation import PostRunEvaluationResult, RadiationQuantityContract
 
@@ -27,12 +27,12 @@ def _load_runner():
     return module
 
 
-def _evaluation_summary(factor: float) -> dict[str, object]:
-    return {
+def _evaluation_result(factor: float) -> PostRunEvaluationResult:
+    summary = {
         "sar": {
             "total_likelihood_score": 0.5 * factor,
             "total_time_discounted_score": 0.25 * factor,
-            "area_covered_km2": 1.0 * factor,
+            "area_covered_km2": factor,
         },
         "uav_radiation": {
             "uav_excess_exposure_distance_integral": 10.0 * factor,
@@ -60,10 +60,6 @@ def _evaluation_summary(factor: float) -> dict[str, object]:
             },
         },
     }
-
-
-def _evaluation_result(factor: float) -> PostRunEvaluationResult:
-    summary = _evaluation_summary(factor)
     return PostRunEvaluationResult(
         evaluation_summary=summary,
         sar_metrics=summary["sar"],
@@ -73,153 +69,110 @@ def _evaluation_result(factor: float) -> PostRunEvaluationResult:
     )
 
 
-def test_repeated_trial_writes_only_minimal_output_set(tmp_path, monkeypatch):
+def _scenario(runner, directory_name: str, scenario_id: str, scenario_type: str):
+    return runner.FrozenRadiationScenario(
+        directory_name=directory_name,
+        scenario_id=scenario_id,
+        scenario_type=scenario_type,
+        measurement_quantity="test_rate",
+        contract=RadiationQuantityContract("test_rate", "u/h", "u"),
+        background_rate=0.0,
+        truth_query_excess=lambda x, y, z: 0.0,
+        truth_query_total=lambda x, y, z: 0.0,
+        source_positions_m=((100.0, 200.0),),
+        config={},
+    )
+
+
+def test_intensity_sweep_is_minimal_resumable_and_reuses_original(
+    tmp_path, monkeypatch
+):
     runner = _load_runner()
-    repeated_root = tmp_path / "repeated"
-    monkeypatch.setattr(runner, "REPEATED_ROOT", repeated_root)
-    context = SimpleNamespace(
-        survivors=SimpleNamespace(points=(Point(0.0, 0.0),)),
-        max_radius_m=600.0,
-        search_center=(100.0, 200.0),
-    )
+    output_root = tmp_path / "intensity"
+    context = SimpleNamespace(max_radius_m=600.0, search_center=(100.0, 200.0))
     monkeypatch.setattr(runner, "load_frozen_context", lambda: context)
+    monkeypatch.setattr(runner, "_trial_context", lambda base, seed: base)
+    monkeypatch.setattr(runner, "_trial_anchors", lambda base, seed: ((0, 0),) * 3)
 
-    def fake_trial_context(base, trial_seed):
-        assert trial_seed in {203, 307}
-        runner._json(runner.FINAL_ROOT / "inputs" / "lost_persons.json", {})
-        return base
-
-    monkeypatch.setattr(runner, "_trial_context", fake_trial_context)
-    monkeypatch.setattr(
-        runner,
-        "_sample_legal_anchor",
-        lambda rng, offsets, radius_m: (0.0, 0.0),
-    )
+    baseline_calls = []
 
     def fake_baseline(base, *, minimal_output=False):
         assert minimal_output
-        path = (
-            runner.FINAL_ROOT
-            / "baseline_original"
-            / "simulation"
-            / "mission_steps.csv"
-        )
+        baseline_calls.append(base)
+        path = runner.FINAL_ROOT / "baseline" / "mission_steps.csv"
         runner._csv(path, [{"step_index": 0}])
         return path
 
     monkeypatch.setattr(runner, "generate_original_baseline", fake_baseline)
-    original_samples = object()
     monkeypatch.setattr(runner, "load_executed_trajectory", lambda path: object())
-    prepare_calls = []
-
-    def fake_prepare(trajectory, *, integration_step_m):
-        prepare_calls.append((trajectory, integration_step_m))
-        return original_samples
-
-    monkeypatch.setattr(runner, "prepare_route_integration_samples", fake_prepare)
-
-    def scenario(directory_name, scenario_id, scenario_type):
-        runner._json(runner.FINAL_ROOT / directory_name / "scenario_config.json", {})
-        return runner.FrozenRadiationScenario(
-            directory_name=directory_name,
-            scenario_id=scenario_id,
-            scenario_type=scenario_type,
-            measurement_quantity="test_rate",
-            contract=RadiationQuantityContract("test_rate", "u/h", "u"),
-            background_rate=0.0,
-            truth_query_excess=lambda x, y, z: 0.0,
-            truth_query_total=lambda x, y, z: 0.0,
-            source_positions_m=((100.0, 200.0),),
-            config={},
-        )
-
+    route_samples = object()
     monkeypatch.setattr(
         runner,
-        "freeze_point_scenario",
-        lambda base, *, multi, anchor_offset_m=None: scenario(
-            "02_multi_point" if multi else "01_single_point",
-            "multi" if multi else "single",
-            "multi_point" if multi else "point_only",
-        ),
+        "prepare_route_integration_samples",
+        lambda trajectory, *, integration_step_m: route_samples,
     )
 
-    def fake_surface(base, *, anchor_offset_m=(0.0, 0.0), save_truth_outputs=True):
-        assert not save_truth_outputs
-        return scenario("03_uniform_surface", "surface", "surface_only")
+    scenarios = (
+        _scenario(runner, "single", "single_point_formal_first_run", "point_only"),
+        _scenario(runner, "multi", "final_three_point_stress_scenario", "multi_point"),
+        _scenario(runner, "surface", "final_uniform_cs137_surface", "surface_only"),
+    )
+    frozen_intensities = []
 
-    monkeypatch.setattr(runner, "freeze_surface_scenario", fake_surface)
+    def fake_freeze(base, anchors, intensity):
+        frozen_intensities.append(intensity)
+        return scenarios
 
-    def fake_run_one(
-        base,
-        frozen,
-        baseline_path,
-        *,
-        minimal_output=False,
-        original_route_integration_samples=None,
-    ):
+    monkeypatch.setattr(runner, "_freeze_intensity_scenarios", fake_freeze)
+
+    def fake_mission(base, scenario, *, minimal_output=False):
         assert minimal_output
-        assert original_route_integration_samples is original_samples
-        path = (
-            runner.FINAL_ROOT
-            / frozen.directory_name
-            / "radiation_aware"
-            / "simulation"
-            / "mission_steps.csv"
-        )
+        path = runner.FINAL_ROOT / scenario.directory_name / "mission_steps.csv"
         runner._csv(path, [{"step_index": 0}])
-        mission = runner.RadiationAwareMissionResult(
+        return runner.RadiationAwareMissionResult(
             trajectory_path=path,
             summary={
+                "status": "COMPLETE",
                 "radiation_episodes": 1,
                 "radiation_steps": 2,
                 "radiation_priority_decisions": 3,
             },
         )
-        return runner.ScenarioRunResult(
-            scenario=frozen,
-            aware_mission=mission,
-            original_evaluation=_evaluation_result(1.0),
-            aware_evaluation=_evaluation_result(2.0),
-        )
 
-    monkeypatch.setattr(runner, "run_one_scenario", fake_run_one)
+    monkeypatch.setattr(runner, "run_radiation_aware_mission", fake_mission)
 
-    def fake_figure(base, frozen, aware_path, output_path):
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(b"png")
+    def fake_evaluate(base, scenario, *, planner_name, **kwargs):
+        if planner_name == "original":
+            assert kwargs["route_integration_samples"] is route_samples
+            return _evaluation_result(1.0)
+        return _evaluation_result(2.0)
 
-    monkeypatch.setattr(runner, "_minimal_trajectory_comparison_figure", fake_figure)
-
-    runner.run_spatial_repeated_trials((203, 307), trial_id_start=2)
-
-    assert len(prepare_calls) == 1
-    expected_files = sorted(
-        [
-            "inputs/lost_persons.json",
-            "baseline_original/simulation/mission_steps.csv",
-            "01_single_point/scenario_config.json",
-            "01_single_point/radiation_aware/simulation/mission_steps.csv",
-            "02_multi_point/scenario_config.json",
-            "02_multi_point/radiation_aware/simulation/mission_steps.csv",
-            "03_uniform_surface/scenario_config.json",
-            "03_uniform_surface/radiation_aware/simulation/mission_steps.csv",
-            "combined/final_summary.csv",
-            "combined/figures/single_trajectory_comparison.png",
-            "combined/figures/multi_trajectory_comparison.png",
-            "combined/figures/surface_trajectory_comparison.png",
-        ]
+    monkeypatch.setattr(runner, "evaluate_route", fake_evaluate)
+    runner.run_intensity_repeated_trials(
+        (runner.TRIAL_SEEDS[0],), (0.25, 0.5), output_root=output_root
     )
-    for trial_root in (
-        repeated_root / "trial_02_seed_203",
-        repeated_root / "trial_03_seed_307",
-    ):
-        relative_files = sorted(
-            path.relative_to(trial_root).as_posix()
-            for path in trial_root.rglob("*")
-            if path.is_file()
-        )
-        assert relative_files == expected_files
-    assert (repeated_root / "repeated_trials_summary.csv").exists()
+
+    assert len(baseline_calls) == 1
+    assert frozen_intensities == [0.25, 0.5]
+    status = runner._read_optional_csv(output_root / "run_status.csv")
+    summary = runner._read_optional_csv(output_root / "intensity_summary.csv")
+    assert [row["status"] for row in status] == ["SUCCESS", "SUCCESS"]
+    assert len(summary) == 6
+    assert {float(row["Y"]) for row in summary} == {0.05}
+    assert {float(row["sigma_m"]) for row in summary} == {40.0}
+    assert {float(row["influence_radius_m"]) for row in summary} == {120.0}
+    assert sorted(path.name for path in output_root.iterdir()) == [
+        "experiment_config.json",
+        "intensity_summary.csv",
+        "run_status.csv",
+        "sweep.log",
+    ]
+
+    runner.run_intensity_repeated_trials(
+        (runner.TRIAL_SEEDS[0],), (0.25, 0.5), output_root=output_root
+    )
+    assert len(baseline_calls) == 1
+    assert len(runner._read_optional_csv(output_root / "intensity_summary.csv")) == 6
 
 
 def test_minimal_evaluation_disables_all_evaluator_outputs(monkeypatch, tmp_path):
@@ -231,28 +184,14 @@ def test_minimal_evaluation_disables_all_evaluator_outputs(monkeypatch, tmp_path
     class FakeEvaluator:
         def __init__(self, config, **kwargs):
             captured["config"] = config
-            captured["route_integration_samples"] = kwargs[
-                "route_integration_samples"
-            ]
+            captured["route_integration_samples"] = kwargs["route_integration_samples"]
 
         def evaluate(self):
             return sentinel
 
     monkeypatch.setattr(runner, "PostRunEvaluator", FakeEvaluator)
     context = SimpleNamespace(survivors_path=tmp_path / "survivors.json")
-    frozen = runner.FrozenRadiationScenario(
-        directory_name="01_single_point",
-        scenario_id="single",
-        scenario_type="point_only",
-        measurement_quantity="test_rate",
-        contract=RadiationQuantityContract("test_rate", "u/h", "u"),
-        background_rate=0.0,
-        truth_query_excess=lambda x, y, z: 0.0,
-        truth_query_total=lambda x, y, z: 0.0,
-        source_positions_m=(),
-        config={},
-    )
-
+    frozen = _scenario(runner, "single", "single", "point_only")
     result = runner.evaluate_route(
         context,
         frozen,
@@ -261,10 +200,44 @@ def test_minimal_evaluation_disables_all_evaluator_outputs(monkeypatch, tmp_path
         minimal_output=True,
         route_integration_samples=route_samples,
     )
-
     assert result is sentinel
-    config = captured["config"]
-    assert not config.write_detail_outputs
-    assert not config.write_cumulative_metrics
-    assert not config.generate_figures
+    assert not captured["config"].write_detail_outputs
+    assert not captured["config"].write_cumulative_metrics
+    assert not captured["config"].generate_figures
     assert captured["route_integration_samples"] is route_samples
+
+
+def test_formal_defaults_and_point_intensity_scale_only_source(tmp_path, monkeypatch):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "FINAL_ROOT", tmp_path)
+    assert runner.TRIAL_SEEDS == (
+        113, 227, 331, 439, 547, 653, 761, 877, 983, 1091,
+        1193, 1297, 1423, 1523, 1627, 1733, 1831, 1931, 2027, 2131,
+    )
+    assert runner.RadiationPlannerParameters() == runner.RadiationPlannerParameters(
+        hazard_reference_y=0.05,
+        kernel_sigma_m=40.0,
+        influence_radius_m=120.0,
+    )
+    context = SimpleNamespace(
+        search_center=(500000.0, 5700000.0),
+        item=SimpleNamespace(projected_crs="EPSG:32630", meter_per_bin=20.0),
+        bounds=(499400.0, 5699400.0, 500600.0, 5700600.0),
+        probability_map=np.full((60, 60), 1.0 / 3600.0),
+        detection_radius_m=20.71067811865475,
+        mission_step_allowance=3600,
+        heatmap_sha256="heatmap",
+        survivor_sha256="survivors",
+    )
+    scenario = runner.freeze_point_scenario(
+        context, multi=True, intensity_multiplier=4.0
+    )
+    strengths = {
+        float(source["reference_excess_uSv_h"])
+        for source in scenario.config["sources"]
+    }
+    assert strengths == {4.0 * runner.POINT_REFERENCE_EXCESS_USV_H}
+    assert len(scenario.config["sources"]) == 3
+    assert scenario.background_rate == runner.POINT_BACKGROUND_USV_H
+    assert scenario.config["background_rate"] == runner.POINT_BACKGROUND_USV_H
+    assert scenario.config["source_intensity_multiplier"] == 4.0

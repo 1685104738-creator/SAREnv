@@ -440,10 +440,15 @@ class PostRunEvaluator:
         ):
             raise ValueError("Evaluation platform altitude conflicts with scenario.")
         if not math.isclose(
-            float(scenario_parameters["value_reference_height_m"]),
+            float(scenario_parameters["survivor_reference_height_m"]),
             self.config.survivor_reference_height_m,
         ):
             raise ValueError("Evaluation ground reference height conflicts with scenario.")
+        if not math.isclose(
+            float(scenario_parameters["uav_measurement_height_m"]),
+            self.config.platform_altitude_m,
+        ):
+            raise ValueError("UAV measurement height conflicts with scenario.")
         minx, miny, maxx, maxy = item.bounds
         if not all(
             minx <= node.x_m <= maxx and miny <= node.y_m <= maxy

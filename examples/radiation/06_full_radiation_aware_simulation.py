@@ -1,9 +1,8 @@
 """Run full Single-Point radiation-aware missions on the Direct-Small dataset.
 
-This first implementation experiment assumes perfect conversion from the
-50 m platform observation to a scalar ground-equivalent value at 1 m AGL.
-Only the sensor reads radiation truth; the estimator and planner receive
-executed-position measurements and online estimates respectively.
+The UAV sensor queries physical truth at its 50 m platform altitude.  Only the
+sensor reads radiation truth; the estimator and planner receive executed-
+position airborne measurements and online estimates respectively.
 """
 
 from __future__ import annotations
@@ -57,11 +56,11 @@ DATASET_DIRECTORY = (
 )
 OUTPUT_ROOT = REPOSITORY_ROOT / "results" / "radiation_aware_adaptive_entry"
 
-SCENARIO_ID = "single_point_small_20m_perfect_ground_equivalent"
+SCENARIO_ID = "single_point_small_20m_physical_airborne"
 PLANNER_SEED = 42
 FOV_DEG = 45.0
 PLATFORM_ALTITUDE_M = 50.0
-VALUE_REFERENCE_HEIGHT_M = 1.0
+SURVIVOR_REFERENCE_HEIGHT_M = 1.0
 BACKGROUND_USV_H = 0.20
 POINT_REFERENCE_EXCESS_USV_H = 20_000.0
 POINT_OFFSET_FROM_SEARCH_CENTER_M = (-130.0, -190.0)
@@ -72,7 +71,7 @@ INITIAL_ENTRY_MULTIPLIERS = (0.01, 0.1, 1.0)
 HYSTERESIS_MARGIN = NOMINAL_HYSTERESIS_MARGIN
 REFERENCE_RADIUS_FRACTION = 0.5
 
-MEASUREMENT_QUANTITY = "ground_equivalent_excess_gamma_dose_rate"
+MEASUREMENT_QUANTITY = "airborne_excess_gamma_dose_rate"
 MEASUREMENT_UNIT = "uSv/h"
 SAMPLING_CONTRACT = "one_noise_free_measurement_per_executed_route_node"
 
@@ -360,7 +359,6 @@ def run_full_mission(
         truth.query_total_dose_rate,
         quantity=MEASUREMENT_QUANTITY,
         unit=MEASUREMENT_UNIT,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
         background_value_to_subtract=BACKGROUND_USV_H,
     )
     radiation_grid = GridSpec.from_bounds(bounds, str(item.projected_crs))
@@ -370,7 +368,7 @@ def run_full_mission(
         unit=MEASUREMENT_UNIT,
         update_radius_m=RADIATION_UPDATE_RADIUS_M,
         kernel_sigma_m=RADIATION_KERNEL_SIGMA_M,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+        value_reference_height_m=PLATFORM_ALTITUDE_M,
     )
     base_hazard_reference_excess = NOMINAL_HAZARD_REFERENCE_EXCESS_USV_H
     trigger = AdaptiveHysteresisRadiationTrigger(
@@ -600,14 +598,14 @@ def run_full_mission(
         observed_mask=np.asarray(estimator.observed_mask),
         bounds=np.asarray(estimator.grid.bounds),
         resolution_m=estimator.grid.resolution_m,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+        value_reference_height_m=PLATFORM_ALTITUDE_M,
         quantity=MEASUREMENT_QUANTITY,
         unit=MEASUREMENT_UNIT,
     )
 
     truth_field = point_source.rasterize(
         radiation_grid,
-        z_m=VALUE_REFERENCE_HEIGHT_M,
+        z_m=PLATFORM_ALTITUDE_M,
     ) + BACKGROUND_USV_H
     _plot_trajectory(
         trajectory_path,
@@ -643,8 +641,9 @@ def run_full_mission(
         "fov_deg": FOV_DEG,
         "camera_detection_radius_m": float(detection_radius_m),
         "platform_altitude_m": PLATFORM_ALTITUDE_M,
-        "value_reference_height_m": VALUE_REFERENCE_HEIGHT_M,
-        "altitude_correction_assumption": "perfect_ground_equivalent_scalar",
+        "uav_measurement_height_m": PLATFORM_ALTITUDE_M,
+        "survivor_reference_height_m": SURVIVOR_REFERENCE_HEIGHT_M,
+        "altitude_correction_assumption": "none_physical_airborne_truth",
         "measurement_quantity": MEASUREMENT_QUANTITY,
         "measurement_unit": MEASUREMENT_UNIT,
         "background_uSv_h": BACKGROUND_USV_H,

@@ -9,16 +9,21 @@ the final cross-scenario outputs. It never queries OSM or regenerates SAR data.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import math
 from pathlib import Path
 import shutil
+import statistics
 import subprocess
+import tempfile
 import time
+import traceback
 from typing import Callable
 import zipfile
 
@@ -68,8 +73,6 @@ from sarenv.radiation import (
 from sarenv.radiation.composite.field import CompositeRadiationField
 from sarenv.radiation.online.estimator import (
     IncrementalRadiationGrid,
-    RADIATION_KERNEL_SIGMA_M,
-    RADIATION_UPDATE_RADIUS_M,
 )
 from sarenv.radiation.online.sensor import NoiseFreeRadiationSensor
 from sarenv.radiation.online.trigger import (
@@ -96,19 +99,22 @@ DATASET_DIRECTORY = (
     / "radiation_area_01_small_20m"
 )
 FINAL_ROOT = REPOSITORY_ROOT / "results" / "final_experiment"
-REPEATED_ROOT = REPOSITORY_ROOT / "results" / "repeated_spatial_trials"
+INTENSITY_ROOT = REPOSITORY_ROOT / "results" / "50m_intensity_sensitivity_20_new_seeds"
 
 PLANNER_SEED = 42
 TRIAL_SEEDS = (
-    101, 203, 307, 401, 509, 601, 709, 809, 907, 1009,
-    1103, 1201, 1307, 1409, 1511, 1601, 1709, 1801, 1907, 2003,
+    113, 227, 331, 439, 547, 653, 761, 877, 983, 1091,
+    1193, 1297, 1423, 1523, 1627, 1733, 1831, 1931, 2027, 2131,
 )
+INTENSITY_MULTIPLIERS = (0.25, 0.5, 1.0, 2.0, 4.0)
 FOV_DEG = 45.0
 PLATFORM_ALTITUDE_M = 50.0
-VALUE_REFERENCE_HEIGHT_M = 1.0
+SURVIVOR_REFERENCE_HEIGHT_M = 1.0
 RADIATION_RESOLUTION_M = 1.0
 INITIAL_ENTRY_MULTIPLIER = 0.01
-BASE_HAZARD_REFERENCE = 10.0
+BASE_HAZARD_REFERENCE = 0.05
+FORMAL_KERNEL_SIGMA_M = 40.0
+FORMAL_INFLUENCE_RADIUS_M = 120.0
 HYSTERESIS_MARGIN = NOMINAL_HYSTERESIS_MARGIN
 REFERENCE_RADIUS_FRACTION = 0.5
 EVALUATION_SPEED_M_S = 10.0
@@ -127,16 +133,34 @@ SURFACE_HALF_HEIGHT_M = 70.0
 SURFACE_PATCH_PADDING_M = 200.0
 SURFACE_BACKGROUND_UGY_H = 0.0
 
-POINT_QUANTITY = "ground_equivalent_excess_gamma_dose_rate"
+POINT_QUANTITY = "airborne_excess_gamma_dose_rate"
 POINT_RATE_UNIT = "uSv/h"
 POINT_DOSE_UNIT = "uSv"
-SURFACE_QUANTITY = "ground_equivalent_excess_collision_air_kerma_rate"
+SURFACE_QUANTITY = "airborne_excess_collision_air_kerma_rate"
 SURFACE_RATE_UNIT = "uGy/h"
 SURFACE_DOSE_UNIT = "uGy"
 SAMPLING_CONTRACT = "one_noise_free_measurement_per_executed_route_node"
 
 
 TruthQuery = Callable[[float, float, float], float]
+
+
+@dataclass(frozen=True)
+class RadiationPlannerParameters:
+    """The only three planner parameters varied by the 50 m sweep."""
+
+    hazard_reference_y: float = BASE_HAZARD_REFERENCE
+    kernel_sigma_m: float = FORMAL_KERNEL_SIGMA_M
+    influence_radius_m: float = FORMAL_INFLUENCE_RADIUS_M
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("hazard_reference_y", self.hazard_reference_y),
+            ("kernel_sigma_m", self.kernel_sigma_m),
+            ("influence_radius_m", self.influence_radius_m),
+        ):
+            if not math.isfinite(value) or value <= 0.0:
+                raise ValueError(f"{name} must be finite and positive.")
 
 
 @dataclass(frozen=True)
@@ -166,6 +190,7 @@ class FrozenRadiationScenario:
     truth_query_total: TruthQuery
     source_positions_m: tuple[tuple[float, float], ...]
     config: dict[str, object]
+    planner_parameters: RadiationPlannerParameters = RadiationPlannerParameters()
 
 
 @dataclass(frozen=True)
@@ -312,7 +337,10 @@ def snapshot_code_state(context: FrozenContext) -> None:
     _json(FINAL_ROOT / "experiment_manifest.json", manifest)
 
 
-def _common_parameters(context: FrozenContext) -> dict[str, object]:
+def _common_parameters(
+    context: FrozenContext,
+    planner_parameters: RadiationPlannerParameters = RadiationPlannerParameters(),
+) -> dict[str, object]:
     return {
         "dataset_size": "small",
         "dataset_bounds_projected": list(context.bounds),
@@ -324,18 +352,21 @@ def _common_parameters(context: FrozenContext) -> dict[str, object]:
         "fov_deg": FOV_DEG,
         "camera_detection_radius_m": context.detection_radius_m,
         "platform_altitude_m": PLATFORM_ALTITUDE_M,
-        "value_reference_height_m": VALUE_REFERENCE_HEIGHT_M,
-        "altitude_correction_assumption": "perfect_ground_equivalent_scalar",
+        "uav_measurement_height_m": PLATFORM_ALTITUDE_M,
+        "survivor_reference_height_m": SURVIVOR_REFERENCE_HEIGHT_M,
+        "altitude_correction_assumption": "none_physical_airborne_truth",
         "planner_seed": PLANNER_SEED,
-        "base_hazard_reference": BASE_HAZARD_REFERENCE,
+        "base_hazard_reference": planner_parameters.hazard_reference_y,
+        "hazard_reference_y": planner_parameters.hazard_reference_y,
         "initial_entry_multiplier": INITIAL_ENTRY_MULTIPLIER,
         "initial_entry_threshold": (
-            BASE_HAZARD_REFERENCE * INITIAL_ENTRY_MULTIPLIER
+            planner_parameters.hazard_reference_y * INITIAL_ENTRY_MULTIPLIER
         ),
         "hysteresis_margin": HYSTERESIS_MARGIN,
         "confirmation_samples": NOISE_FREE_CONFIRMATION_SAMPLES,
-        "gaussian_sigma_m": RADIATION_KERNEL_SIGMA_M,
-        "gaussian_update_radius_m": RADIATION_UPDATE_RADIUS_M,
+        "gaussian_sigma_m": planner_parameters.kernel_sigma_m,
+        "gaussian_update_radius_m": planner_parameters.influence_radius_m,
+        "influence_radius_m": planner_parameters.influence_radius_m,
         "candidate_radiation_aggregation": (
             "strict_max_over_overlapping_radiation_grid_cells"
         ),
@@ -528,13 +559,16 @@ def _point_source(
     *,
     source_id: str,
     offset_m: tuple[float, float],
+    intensity_multiplier: float,
 ) -> PointSource:
     return PointSource(
         PointSourceConfig(
             source_id=source_id,
             x_m=context.search_center[0] + offset_m[0],
             y_m=context.search_center[1] + offset_m[1],
-            reference_excess_uSv_h=POINT_REFERENCE_EXCESS_USV_H,
+            reference_excess_uSv_h=(
+                intensity_multiplier * POINT_REFERENCE_EXCESS_USV_H
+            ),
             crs=str(context.item.projected_crs),
         )
     )
@@ -545,7 +579,11 @@ def freeze_point_scenario(
     *,
     multi: bool,
     anchor_offset_m: tuple[float, float] | None = None,
+    planner_parameters: RadiationPlannerParameters = RadiationPlannerParameters(),
+    intensity_multiplier: float = 1.0,
 ) -> FrozenRadiationScenario:
+    if not math.isfinite(intensity_multiplier) or intensity_multiplier <= 0.0:
+        raise ValueError("intensity_multiplier must be finite and positive.")
     original_offsets = MULTI_POINT_OFFSETS_M if multi else (SINGLE_POINT_OFFSET_M,)
     offsets = (
         original_offsets
@@ -564,6 +602,7 @@ def freeze_point_scenario(
                 else "single_point_formal_first_run"
             ),
             offset_m=offset,
+            intensity_multiplier=intensity_multiplier,
         )
         for index, offset in enumerate(offsets)
     )
@@ -579,7 +618,7 @@ def freeze_point_scenario(
         point_sources=sources,
     )
     config = {
-        **_common_parameters(context),
+        **_common_parameters(context, planner_parameters),
         "scenario_id": scenario_id,
         "scenario_type": "multi_point" if multi else "point_only",
         "measurement_quantity": POINT_QUANTITY,
@@ -588,6 +627,8 @@ def freeze_point_scenario(
         "radiation_dose_unit": POINT_DOSE_UNIT,
         "background_rate": POINT_BACKGROUND_USV_H,
         "background_unit": POINT_RATE_UNIT,
+        "source_intensity_multiplier": intensity_multiplier,
+        "baseline_per_source_reference_excess": POINT_REFERENCE_EXCESS_USV_H,
         "sources": [source.to_metadata() for source in sources],
         "configuration_anchor_offset_m": (
             [0.0, 0.0] if anchor_offset_m is None else list(anchor_offset_m)
@@ -600,7 +641,9 @@ def freeze_point_scenario(
             if multi
             else "reused validated single_point_formal_first_run position"
         ),
-        "per_source_reference_excess": POINT_REFERENCE_EXCESS_USV_H,
+        "per_source_reference_excess": (
+            intensity_multiplier * POINT_REFERENCE_EXCESS_USV_H
+        ),
         "per_source_reference_unit": POINT_RATE_UNIT,
         "total_source_strength_relation_to_single": (
             "three sources at the same per-source strength; higher total burden"
@@ -627,6 +670,7 @@ def freeze_point_scenario(
             (source.config.x_m, source.config.y_m) for source in sources
         ),
         config=config,
+        planner_parameters=planner_parameters,
     )
 
 
@@ -635,7 +679,11 @@ def freeze_surface_scenario(
     *,
     anchor_offset_m: tuple[float, float] = (0.0, 0.0),
     save_truth_outputs: bool = True,
+    planner_parameters: RadiationPlannerParameters = RadiationPlannerParameters(),
+    intensity_multiplier: float = 1.0,
 ) -> FrozenRadiationScenario:
+    if not math.isfinite(intensity_multiplier) or intensity_multiplier <= 0.0:
+        raise ValueError("intensity_multiplier must be finite and positive.")
     center_x = context.search_center[0] + anchor_offset_m[0]
     center_y = context.search_center[1] + anchor_offset_m[1]
     geometry = box(
@@ -648,7 +696,9 @@ def freeze_surface_scenario(
         UniformPolygonConfig(
             source_id="final_uniform_cs137_surface",
             geometry=geometry,
-            activity_density_bq_m2=MEDIUM_ACTIVITY_DENSITY_BQ_M2,
+            activity_density_bq_m2=(
+                intensity_multiplier * MEDIUM_ACTIVITY_DENSITY_BQ_M2
+            ),
             crs=str(context.item.projected_crs),
         )
     )
@@ -679,7 +729,7 @@ def freeze_surface_scenario(
             truth.platform_patch.metadata,
         )
     config = {
-        **_common_parameters(context),
+        **_common_parameters(context, planner_parameters),
         "scenario_id": "final_uniform_cs137_surface",
         "scenario_type": "surface_only",
         "measurement_quantity": SURFACE_QUANTITY,
@@ -688,9 +738,13 @@ def freeze_surface_scenario(
         "radiation_dose_unit": SURFACE_DOSE_UNIT,
         "background_rate": SURFACE_BACKGROUND_UGY_H,
         "background_unit": SURFACE_RATE_UNIT,
+        "source_intensity_multiplier": intensity_multiplier,
+        "baseline_activity_density_bq_m2": MEDIUM_ACTIVITY_DENSITY_BQ_M2,
         "radionuclide": "Cs-137",
         "surface_type": "uniform_polygon",
-        "activity_density_bq_m2": MEDIUM_ACTIVITY_DENSITY_BQ_M2,
+        "activity_density_bq_m2": (
+            intensity_multiplier * MEDIUM_ACTIVITY_DENSITY_BQ_M2
+        ),
         "polygon_bounds": list(geometry.bounds),
         "polygon_exterior_coordinates": [
             [float(x), float(y)] for x, y in geometry.exterior.coords
@@ -699,7 +753,7 @@ def freeze_surface_scenario(
         "patch_bounds": list(grid.bounds),
         "patch_shape": list(grid.shape),
         "patch_padding_m": SURFACE_PATCH_PADDING_M,
-        "ground_truth_plane_height_m": VALUE_REFERENCE_HEIGHT_M,
+        "ground_truth_plane_height_m": SURVIVOR_REFERENCE_HEIGHT_M,
         "platform_evaluation_plane_height_m": PLATFORM_ALTITUDE_M,
         "platform_plane_method": (
             "same production activity raster, Cs-137 gamma yield, inverse-square "
@@ -707,7 +761,9 @@ def freeze_surface_scenario(
             "observation height changed in R"
         ),
         "uGy_to_uSv_conversion_applied": False,
-        "surface_hazard_reference_native_value": BASE_HAZARD_REFERENCE,
+        "surface_hazard_reference_native_value": (
+            planner_parameters.hazard_reference_y
+        ),
         "surface_hazard_reference_native_unit": SURFACE_RATE_UNIT,
         "minimum_raw_ground_fft_before_clipping": (
             result.minimum_raw_fft_value_before_clipping
@@ -748,6 +804,7 @@ def freeze_surface_scenario(
         truth_query_total=total_query,
         source_positions_m=((center_x, center_y),),
         config=config,
+        planner_parameters=planner_parameters,
     )
 
 
@@ -783,7 +840,6 @@ def run_radiation_aware_mission(
         scenario.truth_query_total,
         quantity=scenario.measurement_quantity,
         unit=scenario.contract.rate_unit,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
         background_value_to_subtract=scenario.background_rate,
     )
     radiation_grid = GridSpec.from_bounds(
@@ -794,12 +850,12 @@ def run_radiation_aware_mission(
         radiation_grid,
         quantity=scenario.measurement_quantity,
         unit=scenario.contract.rate_unit,
-        update_radius_m=RADIATION_UPDATE_RADIUS_M,
-        kernel_sigma_m=RADIATION_KERNEL_SIGMA_M,
-        value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+        update_radius_m=scenario.planner_parameters.influence_radius_m,
+        kernel_sigma_m=scenario.planner_parameters.kernel_sigma_m,
+        value_reference_height_m=PLATFORM_ALTITUDE_M,
     )
     trigger = AdaptiveHysteresisRadiationTrigger(
-        base_hazard_reference=BASE_HAZARD_REFERENCE,
+        base_hazard_reference=scenario.planner_parameters.hazard_reference_y,
         initial_entry_multiplier=INITIAL_ENTRY_MULTIPLIER,
         quantity=scenario.measurement_quantity,
         unit=scenario.contract.rate_unit,
@@ -814,7 +870,7 @@ def run_radiation_aware_mission(
         max_radius=context.max_radius_m,
         detection_radius_m=context.detection_radius_m,
         estimator=estimator,
-        hazard_reference_excess=BASE_HAZARD_REFERENCE,
+        hazard_reference_excess=scenario.planner_parameters.hazard_reference_y,
         reference_radius_fraction=REFERENCE_RADIUS_FRACTION,
         rng=planner_rng,
     )
@@ -873,7 +929,7 @@ def run_radiation_aware_mission(
                     if observation
                     else trigger.current_exit_threshold
                 ),
-                "base_hazard_reference": BASE_HAZARD_REFERENCE,
+                "base_hazard_reference": scenario.planner_parameters.hazard_reference_y,
                 "trigger_measurement": (
                     observation.measurement.value if observation else None
                 ),
@@ -1009,7 +1065,7 @@ def run_radiation_aware_mission(
             observed_mask=np.asarray(estimator.observed_mask),
             bounds=np.asarray(estimator.grid.bounds),
             resolution_m=estimator.grid.resolution_m,
-            value_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+            value_reference_height_m=PLATFORM_ALTITUDE_M,
             quantity=scenario.measurement_quantity,
             unit=scenario.contract.rate_unit,
         )
@@ -1034,7 +1090,7 @@ def run_radiation_aware_mission(
         "measurement_quantity": scenario.measurement_quantity,
         "measurement_unit": scenario.contract.rate_unit,
         "estimated_quantity_contract": "excess_above_background_numeric_zero_prior",
-        "hazard_reference_native_value": BASE_HAZARD_REFERENCE,
+        "hazard_reference_native_value": scenario.planner_parameters.hazard_reference_y,
         "hazard_reference_native_unit": scenario.contract.rate_unit,
         "entry_increment_native_value": trigger.initial_entry_threshold,
         "initial_entry_threshold_native_value": trigger.initial_entry_threshold,
@@ -1126,7 +1182,7 @@ def evaluate_route(
             ),
             output_directory=output_directory,
             platform_altitude_m=PLATFORM_ALTITUDE_M,
-            survivor_reference_height_m=VALUE_REFERENCE_HEIGHT_M,
+            survivor_reference_height_m=SURVIVOR_REFERENCE_HEIGHT_M,
             fov_deg=FOV_DEG,
             background_rate=scenario.background_rate,
             radiation_quantity=scenario.contract.quantity,
@@ -1376,7 +1432,7 @@ def _truth_grid(
     context: FrozenContext,
     scenario: FrozenRadiationScenario,
     *,
-    height_m: float = VALUE_REFERENCE_HEIGHT_M,
+    height_m: float = SURVIVOR_REFERENCE_HEIGHT_M,
     resolution_m: float = 4.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x_values = np.arange(
@@ -2222,119 +2278,682 @@ def _trial_context(base: FrozenContext, trial_seed: int) -> FrozenContext:
     )
 
 
-def run_spatial_repeated_trials(
+INTENSITY_SCENARIO_LABELS = {
+    "single_point_formal_first_run": "Single",
+    "final_three_point_stress_scenario": "Multi",
+    "final_uniform_cs137_surface": "Surface",
+}
+INTENSITY_CORE_METRICS = (
+    "sar_likelihood_score",
+    "sar_time_discounted_score",
+    "survivors_found",
+    "route_distance_m",
+    "survivor_total_pre_discovery_dose",
+    "survivor_mean_pre_discovery_dose",
+    "survivor_p95_pre_discovery_dose",
+    "survivor_max_pre_discovery_dose",
+    "uav_cumulative_excess_dose",
+    "uav_cumulative_total_dose",
+)
+
+
+def _read_optional_csv(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open("r", newline="", encoding="utf-8") as stream:
+        return list(csv.DictReader(stream))
+
+
+def _atomic_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        raise ValueError(f"Refusing to write empty CSV: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    temporary.replace(path)
+
+
+def _intensity_key(value: float) -> str:
+    return format(value, "g")
+
+
+def _intensity_test_id(seed: int, intensity: float) -> str:
+    return f"seed_{seed}_intensity_{_intensity_key(intensity).replace('.', 'p')}x"
+
+
+def _intensity_log(output_root: Path, message: str) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    with (output_root / "sweep.log").open("a", encoding="utf-8") as stream:
+        stream.write(f"{timestamp} {message}\n")
+
+
+def _intensity_status_rows(
     seeds: tuple[int, ...],
+    intensities: tuple[float, ...],
+    output_root: Path,
+) -> list[dict[str, object]]:
+    existing = {
+        (int(row["seed"]), float(row["intensity_multiplier"])): row
+        for row in _read_optional_csv(output_root / "run_status.csv")
+    }
+    rows: list[dict[str, object]] = []
+    for seed in seeds:
+        for intensity in intensities:
+            prior = existing.get((seed, intensity), {})
+            rows.append(
+                {
+                    "test_id": _intensity_test_id(seed, intensity),
+                    "seed": seed,
+                    "intensity_multiplier": intensity,
+                    "Y": BASE_HAZARD_REFERENCE,
+                    "sigma_m": FORMAL_KERNEL_SIGMA_M,
+                    "influence_radius_m": FORMAL_INFLUENCE_RADIUS_M,
+                    "status": prior.get("status", "PENDING"),
+                    "runtime_s": prior.get("runtime_s", ""),
+                    "completed_scenarios": prior.get("completed_scenarios", ""),
+                    "failed_scenarios": prior.get("failed_scenarios", ""),
+                    "error": prior.get("error", ""),
+                }
+            )
+    return rows
+
+
+def _update_intensity_status(
+    seeds: tuple[int, ...],
+    intensities: tuple[float, ...],
+    output_root: Path,
+    seed: int,
+    intensity: float,
     *,
-    trial_id_start: int = 1,
+    status: str,
+    runtime_s: float,
+    completed: tuple[str, ...] | list[str] = (),
+    failed: tuple[str, ...] | list[str] = (),
+    error: str = "",
 ) -> None:
-    """Run seeded spatial realisations with the minimal repeated-trial output set."""
+    rows = _intensity_status_rows(seeds, intensities, output_root)
+    for row in rows:
+        if int(row["seed"]) == seed and math.isclose(
+            float(row["intensity_multiplier"]), intensity
+        ):
+            row.update(
+                {
+                    "status": status,
+                    "runtime_s": f"{runtime_s:.6f}",
+                    "completed_scenarios": ";".join(completed),
+                    "failed_scenarios": ";".join(failed),
+                    "error": error,
+                }
+            )
+            break
+    _atomic_csv(output_root / "run_status.csv", rows)
+
+
+def _successful_intensity_pairs(output_root: Path) -> set[tuple[int, float]]:
+    counts: dict[tuple[int, float], int] = {}
+    for row in _read_optional_csv(output_root / "intensity_summary.csv"):
+        key = (int(row["seed"]), float(row["intensity_multiplier"]))
+        counts[key] = counts.get(key, 0) + 1
+    return {
+        (int(row["seed"]), float(row["intensity_multiplier"]))
+        for row in _read_optional_csv(output_root / "run_status.csv")
+        if row["status"] == "SUCCESS"
+        and counts.get((int(row["seed"]), float(row["intensity_multiplier"]))) == 3
+    }
+
+
+def _trial_anchors(context: FrozenContext, seed: int):
+    rng = np.random.default_rng(seed)
+    single = _sample_legal_anchor(
+        rng, (SINGLE_POINT_OFFSET_M,), context.max_radius_m
+    )
+    multi = _sample_legal_anchor(rng, MULTI_POINT_OFFSETS_M, context.max_radius_m)
+    corners = (
+        (-SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
+        (-SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
+        (SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
+        (SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
+    )
+    surface = _sample_legal_anchor(rng, corners, context.max_radius_m)
+    return single, multi, surface
+
+
+def _freeze_intensity_scenarios(
+    context: FrozenContext,
+    anchors,
+    intensity: float,
+) -> tuple[FrozenRadiationScenario, ...]:
+    parameters = RadiationPlannerParameters()
+    return (
+        freeze_point_scenario(
+            context,
+            multi=False,
+            anchor_offset_m=anchors[0],
+            planner_parameters=parameters,
+            intensity_multiplier=intensity,
+        ),
+        freeze_point_scenario(
+            context,
+            multi=True,
+            anchor_offset_m=anchors[1],
+            planner_parameters=parameters,
+            intensity_multiplier=intensity,
+        ),
+        freeze_surface_scenario(
+            context,
+            anchor_offset_m=anchors[2],
+            save_truth_outputs=False,
+            planner_parameters=parameters,
+            intensity_multiplier=intensity,
+        ),
+    )
+
+
+def _intensity_result_row(
+    seed: int,
+    intensity: float,
+    scenario: FrozenRadiationScenario,
+    original: PostRunEvaluationResult,
+    aware: PostRunEvaluationResult,
+    mission: RadiationAwareMissionResult,
+) -> dict[str, object]:
+    original_values = _summary_row_from_payloads(
+        scenario, "original", original.evaluation_summary, {}
+    )
+    aware_values = _summary_row_from_payloads(
+        scenario, "radiation_aware", aware.evaluation_summary, mission.summary
+    )
+    row: dict[str, object] = {
+        "test_id": _intensity_test_id(seed, intensity),
+        "seed": seed,
+        "planner_seed": PLANNER_SEED,
+        "intensity_multiplier": intensity,
+        "independent_final_validation": intensity == 1.0,
+        "Y": BASE_HAZARD_REFERENCE,
+        "sigma_m": FORMAL_KERNEL_SIGMA_M,
+        "influence_radius_m": FORMAL_INFLUENCE_RADIUS_M,
+        "scenario": INTENSITY_SCENARIO_LABELS[scenario.scenario_id],
+        "scenario_id": scenario.scenario_id,
+        "scenario_type": scenario.scenario_type,
+        "radiation_quantity": scenario.contract.quantity,
+        "radiation_rate_unit": scenario.contract.rate_unit,
+        "radiation_dose_unit": scenario.contract.dose_unit,
+        "radiation_positions_m": json.dumps(scenario.source_positions_m),
+        "background_rate": scenario.background_rate,
+    }
+    for metric in INTENSITY_CORE_METRICS:
+        original_value = float(original_values[metric])
+        aware_value = float(aware_values[metric])
+        delta = aware_value - original_value
+        row[f"original_{metric}"] = original_value
+        row[f"aware_{metric}"] = aware_value
+        row[f"delta_{metric}"] = delta
+        row[f"delta_percent_{metric}"] = (
+            "" if original_value == 0.0 else 100.0 * delta / original_value
+        )
+    for metric in (
+        "radiation_episodes", "radiation_steps", "radiation_priority_decisions"
+    ):
+        row[metric] = float(aware_values[metric])
+    return row
+
+
+def _commit_intensity_rows(
+    output_root: Path,
+    seed: int,
+    intensity: float,
+    rows: list[dict[str, object]],
+) -> None:
+    existing = [
+        row
+        for row in _read_optional_csv(output_root / "intensity_summary.csv")
+        if not (
+            int(row["seed"]) == seed
+            and math.isclose(float(row["intensity_multiplier"]), intensity)
+        )
+    ]
+    combined: list[dict[str, object]] = [*existing, *rows]
+    combined.sort(
+        key=lambda row: (
+            TRIAL_SEEDS.index(int(row["seed"])),
+            INTENSITY_MULTIPLIERS.index(float(row["intensity_multiplier"])),
+            ("Single", "Multi", "Surface").index(str(row["scenario"])),
+        )
+    )
+    _atomic_csv(output_root / "intensity_summary.csv", combined)
+
+
+def _write_intensity_config(
+    output_root: Path,
+    seeds: tuple[int, ...],
+    intensities: tuple[float, ...],
+    *,
+    smoke: dict[str, object] | None = None,
+) -> None:
+    path = output_root / "experiment_config.json"
+    if smoke is None and path.exists():
+        smoke = json.loads(path.read_text(encoding="utf-8")).get("smoke_test")
+    statuses = _read_optional_csv(output_root / "run_status.csv")
+    _json(
+        path,
+        {
+            "updated_utc": datetime.now(timezone.utc).isoformat(),
+            "seed_source": "examples/radiation/09_final_experiment.py::TRIAL_SEEDS",
+            "seeds": list(seeds),
+            "intensity_multipliers": list(intensities),
+            "independent_final_validation_multiplier": 1.0,
+            "Y": BASE_HAZARD_REFERENCE,
+            "sigma_m": FORMAL_KERNEL_SIGMA_M,
+            "influence_radius_m": FORMAL_INFLUENCE_RADIUS_M,
+            "point_baseline_reference_excess_uSv_h": POINT_REFERENCE_EXCESS_USV_H,
+            "surface_baseline_activity_density_bq_m2": MEDIUM_ACTIVITY_DENSITY_BQ_M2,
+            "point_background_uSv_h_unscaled": POINT_BACKGROUND_USV_H,
+            "surface_background_uGy_h_unscaled": SURFACE_BACKGROUND_UGY_H,
+            "uav_sensing_and_evaluation_height_m": PLATFORM_ALTITUDE_M,
+            "survivor_evaluation_height_m": SURVIVOR_REFERENCE_HEIGHT_M,
+            "original_policy": "one radiation-blind Original mission per seed",
+            "status_counts": {
+                state: sum(row["status"] == state for row in statuses)
+                for state in ("SUCCESS", "FAILED", "PENDING")
+            },
+            "git_branch": _git("branch", "--show-current").strip(),
+            "git_commit_hash": _git("rev-parse", "HEAD").strip(),
+            "smoke_test": smoke,
+        },
+    )
+
+
+def run_intensity_repeated_trials(
+    seeds: tuple[int, ...],
+    intensities: tuple[float, ...] = INTENSITY_MULTIPLIERS,
+    *,
+    output_root: Path = INTENSITY_ROOT,
+) -> None:
+    """Run the resumable minimal intensity sweep using one Original per seed."""
     global FINAL_ROOT
     if len(set(seeds)) != len(seeds):
         raise ValueError("Trial seeds must be unique.")
-    if trial_id_start <= 0:
-        raise ValueError("trial_id_start must be positive.")
+    if not intensities or len(set(intensities)) != len(intensities):
+        raise ValueError("Intensity multipliers must be non-empty and unique.")
+    if any(not math.isfinite(value) or value <= 0.0 for value in intensities):
+        raise ValueError("Intensity multipliers must be finite and positive.")
+    output_root.mkdir(parents=True, exist_ok=True)
+    if not (output_root / "run_status.csv").exists():
+        _atomic_csv(
+            output_root / "run_status.csv",
+            _intensity_status_rows(seeds, intensities, output_root),
+        )
+    successful = _successful_intensity_pairs(output_root)
     canonical_root = FINAL_ROOT
     base = load_frozen_context()
-    aggregate: list[dict[str, object]] = []
-    original_route_integration_samples: RouteIntegrationSamples | None = None
+    _intensity_log(
+        output_root,
+        "SWEEP START seeds=" + ",".join(map(str, seeds))
+        + " intensities=" + ",".join(map(_intensity_key, intensities)),
+    )
     try:
-        for trial_id, trial_seed in enumerate(seeds, start=trial_id_start):
-            FINAL_ROOT = REPEATED_ROOT / f"trial_{trial_id:02d}_seed_{trial_seed}"
-            print(f"Trial {trial_id:02d} | seed={trial_seed}", flush=True)
-            context = _trial_context(base, trial_seed)
-            rng = np.random.default_rng(trial_seed)
-            single_anchor = _sample_legal_anchor(
-                rng, (SINGLE_POINT_OFFSET_M,), context.max_radius_m
-            )
-            multi_anchor = _sample_legal_anchor(
-                rng, MULTI_POINT_OFFSETS_M, context.max_radius_m
-            )
-            surface_corners = (
-                (-SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
-                (-SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
-                (SURFACE_HALF_WIDTH_M, -SURFACE_HALF_HEIGHT_M),
-                (SURFACE_HALF_WIDTH_M, SURFACE_HALF_HEIGHT_M),
-            )
-            surface_anchor = _sample_legal_anchor(
-                rng, surface_corners, context.max_radius_m
-            )
-
-            baseline_path = generate_original_baseline(
-                context,
-                minimal_output=True,
-            )
-            if original_route_integration_samples is None:
-                original_route_integration_samples = prepare_route_integration_samples(
-                    load_executed_trajectory(baseline_path),
-                    integration_step_m=RADIATION_INTEGRATION_STEP_M,
+        for seed_index, seed in enumerate(seeds, start=1):
+            pending = [value for value in intensities if (seed, value) not in successful]
+            if not pending:
+                _intensity_log(output_root, f"SEED {seed} all SUCCESS skipped")
+                continue
+            with tempfile.TemporaryDirectory(prefix=f"sarenv_intensity_{seed}_") as temp:
+                seed_root = Path(temp) / f"seed_{seed}"
+                try:
+                    FINAL_ROOT = seed_root / "shared_original"
+                    context = _trial_context(base, seed)
+                    anchors = _trial_anchors(context, seed)
+                    baseline_path = generate_original_baseline(
+                        context, minimal_output=True
+                    )
+                    route_samples = prepare_route_integration_samples(
+                        load_executed_trajectory(baseline_path),
+                        integration_step_m=RADIATION_INTEGRATION_STEP_M,
+                    )
+                except Exception as error:
+                    message = f"{type(error).__name__}: {error}"
+                    _intensity_log(output_root, f"ERROR seed={seed} setup {message}")
+                    for intensity in pending:
+                        _update_intensity_status(
+                            seeds, intensities, output_root, seed, intensity,
+                            status="FAILED", runtime_s=0.0,
+                            failed=["Single", "Multi", "Surface"], error=message,
+                        )
+                    continue
+                _intensity_log(
+                    output_root,
+                    f"SEED START {seed_index}/{len(seeds)} seed={seed} Original=once",
                 )
-            single = freeze_point_scenario(
-                context, multi=False, anchor_offset_m=single_anchor
-            )
-            single_result = run_one_scenario(
-                context,
-                single,
-                baseline_path,
-                minimal_output=True,
-                original_route_integration_samples=(
-                    original_route_integration_samples
-                ),
-            )
-            multiple = freeze_point_scenario(
-                context, multi=True, anchor_offset_m=multi_anchor
-            )
-            multiple_result = run_one_scenario(
-                context,
-                multiple,
-                baseline_path,
-                minimal_output=True,
-                original_route_integration_samples=(
-                    original_route_integration_samples
-                ),
-            )
-            surface = freeze_surface_scenario(
-                context,
-                anchor_offset_m=surface_anchor,
-                save_truth_outputs=False,
-            )
-            surface_result = run_one_scenario(
-                context,
-                surface,
-                baseline_path,
-                minimal_output=True,
-                original_route_integration_samples=(
-                    original_route_integration_samples
-                ),
-            )
-            scenarios = (single, multiple, surface)
-            rows = generate_minimal_combined_outputs(
-                context,
-                (single_result, multiple_result, surface_result),
-            )
-
-            anchors = {
-                single.scenario_id: single_anchor,
-                multiple.scenario_id: multi_anchor,
-                surface.scenario_id: surface_anchor,
-            }
-            scenario_by_id = {scenario.scenario_id: scenario for scenario in scenarios}
-            for row in rows:
-                scenario = scenario_by_id[row["scenario"]]
-                anchor = anchors[scenario.scenario_id]
-                aggregate.append(
-                    {
-                        "trial_id": trial_id,
-                        "trial_seed": trial_seed,
-                        "planner_seed": PLANNER_SEED,
-                        "radiation_anchor_x_m": context.search_center[0] + anchor[0],
-                        "radiation_anchor_y_m": context.search_center[1] + anchor[1],
-                        "radiation_positions_m": json.dumps(scenario.source_positions_m),
-                        **row,
-                    }
-                )
+                for intensity in pending:
+                    started = time.perf_counter()
+                    FINAL_ROOT = seed_root / f"intensity_{_intensity_key(intensity)}x"
+                    completed: list[str] = []
+                    failures: list[tuple[str, str]] = []
+                    result_rows: list[dict[str, object]] = []
+                    scenarios = _freeze_intensity_scenarios(
+                        context, anchors, intensity
+                    )
+                    for scenario in scenarios:
+                        label = INTENSITY_SCENARIO_LABELS[scenario.scenario_id]
+                        try:
+                            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                                mission = run_radiation_aware_mission(
+                                    context, scenario, minimal_output=True
+                                )
+                                aware = evaluate_route(
+                                    context, scenario,
+                                    planner_name="radiation_aware",
+                                    trajectory_path=mission.trajectory_path,
+                                    minimal_output=True,
+                                )
+                                original = evaluate_route(
+                                    context, scenario,
+                                    planner_name="original",
+                                    trajectory_path=baseline_path,
+                                    minimal_output=True,
+                                    route_integration_samples=route_samples,
+                                )
+                            result_rows.append(
+                                _intensity_result_row(
+                                    seed, intensity, scenario, original, aware, mission
+                                )
+                            )
+                            completed.append(label)
+                        except Exception as error:
+                            message = f"{type(error).__name__}: {error}"
+                            failures.append((label, message))
+                            _intensity_log(
+                                output_root,
+                                f"ERROR seed={seed} intensity={intensity:g}x "
+                                f"scenario={label} {message} | "
+                                + " | ".join(traceback.format_exc().splitlines()[-4:]),
+                            )
+                    runtime = time.perf_counter() - started
+                    if result_rows:
+                        _commit_intensity_rows(
+                            output_root, seed, intensity, result_rows
+                        )
+                    if failures:
+                        _update_intensity_status(
+                            seeds, intensities, output_root, seed, intensity,
+                            status="FAILED", runtime_s=runtime, completed=completed,
+                            failed=[name for name, _ in failures],
+                            error=" | ".join(f"{n}: {e}" for n, e in failures),
+                        )
+                        _intensity_log(
+                            output_root,
+                            f"RUN FAILED seed={seed} intensity={intensity:g}x "
+                            f"runtime_s={runtime:.3f}",
+                        )
+                    else:
+                        _update_intensity_status(
+                            seeds, intensities, output_root, seed, intensity,
+                            status="SUCCESS", runtime_s=runtime, completed=completed,
+                        )
+                        successful.add((seed, intensity))
+                        episodes = ",".join(
+                            f"{row['scenario']}={int(float(row['radiation_episodes']))}"
+                            for row in result_rows
+                        )
+                        _intensity_log(
+                            output_root,
+                            f"RUN SUCCESS seed={seed} intensity={intensity:g}x "
+                            f"runtime_s={runtime:.3f} episodes[{episodes}]",
+                        )
+            _write_intensity_config(output_root, seeds, intensities)
     finally:
         FINAL_ROOT = canonical_root
-    _csv(REPEATED_ROOT / "repeated_trials_summary.csv", aggregate)
+    _intensity_log(
+        output_root,
+        f"SWEEP END successful={len(_successful_intensity_pairs(output_root))}/"
+        f"{len(seeds) * len(intensities)}",
+    )
+    _write_intensity_config(output_root, seeds, intensities)
+
+
+def run_intensity_smoke() -> dict[str, object]:
+    """Run one disposable 1x trial and verify all five source scaling levels."""
+    global FINAL_ROOT
+    started = time.perf_counter()
+    canonical_root = FINAL_ROOT
+    try:
+        with tempfile.TemporaryDirectory(prefix="sarenv_intensity_smoke_") as temp:
+            temporary = Path(temp)
+            base = load_frozen_context()
+            FINAL_ROOT = temporary / "contract"
+            context = _trial_context(base, TRIAL_SEEDS[0])
+            anchors = _trial_anchors(context, TRIAL_SEEDS[0])
+            for intensity in INTENSITY_MULTIPLIERS:
+                FINAL_ROOT = temporary / "contract" / _intensity_key(intensity)
+                scenarios = _freeze_intensity_scenarios(context, anchors, intensity)
+                single, multiple, surface = scenarios
+                expected_point = intensity * POINT_REFERENCE_EXCESS_USV_H
+                for point_scenario in (single, multiple):
+                    strengths = {
+                        float(source["reference_excess_uSv_h"])
+                        for source in point_scenario.config["sources"]
+                    }
+                    if strengths != {expected_point}:
+                        raise AssertionError("Point-source intensity scaling failed.")
+                    if point_scenario.background_rate != POINT_BACKGROUND_USV_H:
+                        raise AssertionError("Point background was scaled.")
+                expected_surface = intensity * MEDIUM_ACTIVITY_DENSITY_BQ_M2
+                if not math.isclose(
+                    float(surface.config["activity_density_bq_m2"]),
+                    expected_surface,
+                    rel_tol=0.0,
+                    abs_tol=1e-9,
+                ):
+                    raise AssertionError("Surface activity scaling failed.")
+                if surface.background_rate != SURFACE_BACKGROUND_UGY_H:
+                    raise AssertionError("Surface background was scaled.")
+            smoke_output = temporary / "output"
+            run_intensity_repeated_trials(
+                (TRIAL_SEEDS[0],), (1.0,), output_root=smoke_output
+            )
+            statuses = _read_optional_csv(smoke_output / "run_status.csv")
+            rows = _read_optional_csv(smoke_output / "intensity_summary.csv")
+            if len(statuses) != 1 or statuses[0]["status"] != "SUCCESS":
+                raise AssertionError("Disposable 1x trial failed.")
+            if len(rows) != 3:
+                raise AssertionError("Disposable 1x trial did not produce three rows.")
+            payload = {
+                "status": "PASSED",
+                "seed": TRIAL_SEEDS[0],
+                "intensity_multiplier": 1.0,
+                "all_intensity_contracts_checked": list(INTENSITY_MULTIPLIERS),
+                "background_unscaled": True,
+                "Y": BASE_HAZARD_REFERENCE,
+                "sigma_m": FORMAL_KERNEL_SIGMA_M,
+                "influence_radius_m": FORMAL_INFLUENCE_RADIUS_M,
+                "scenario_rows": len(rows),
+                "runtime_s": time.perf_counter() - started,
+                "discarded": True,
+            }
+    finally:
+        FINAL_ROOT = canonical_root
+    INTENSITY_ROOT.mkdir(parents=True, exist_ok=True)
+    _intensity_log(
+        INTENSITY_ROOT,
+        f"SMOKE PASSED seed={payload['seed']} intensity=1x "
+        f"runtime_s={payload['runtime_s']:.3f} discarded",
+    )
+    _write_intensity_config(
+        INTENSITY_ROOT, TRIAL_SEEDS, INTENSITY_MULTIPLIERS, smoke=payload
+    )
+    return payload
+
+
+def _distribution(values: list[float]) -> dict[str, float]:
+    return {
+        "mean": statistics.fmean(values),
+        "median": statistics.median(values),
+        "sd": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+    }
+
+
+def _compact_distribution(values: list[float]) -> str:
+    stats = _distribution(values)
+    return (
+        f"{stats['mean']:.2f} / {stats['median']:.2f} / {stats['sd']:.2f} "
+        f"[{stats['min']:.2f}, {stats['max']:.2f}]"
+    )
+
+
+def _markdown_table(headers: list[str], rows: list[list[object]]) -> str:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    lines.extend("| " + " | ".join(map(str, row)) + " |" for row in rows)
+    return "\n".join(lines)
+
+
+def generate_intensity_report(output_root: Path = INTENSITY_ROOT) -> None:
+    rows = _read_optional_csv(output_root / "intensity_summary.csv")
+    statuses = _read_optional_csv(output_root / "run_status.csv")
+    if len(rows) != 300 or sum(row["status"] == "SUCCESS" for row in statuses) != 100:
+        raise RuntimeError("Intensity report requires 100 SUCCESS tests and 300 rows.")
+
+    metrics = {
+        "SAR Δ%": "delta_percent_sar_likelihood_score",
+        "Time Δ%": "delta_percent_sar_time_discounted_score",
+        "Found Δ": "delta_survivors_found",
+        "Total Δ%": "delta_percent_survivor_total_pre_discovery_dose",
+        "P95 Δ%": "delta_percent_survivor_p95_pre_discovery_dose",
+        "Max Δ%": "delta_percent_survivor_max_pre_discovery_dose",
+        "UAV Δ%": "delta_percent_uav_cumulative_excess_dose",
+    }
+    compact_rows: list[list[object]] = []
+    distribution_rows: list[list[object]] = []
+    pooled_rows: list[list[object]] = []
+    for intensity in INTENSITY_MULTIPLIERS:
+        intensity_rows = [
+            row for row in rows
+            if math.isclose(float(row["intensity_multiplier"]), intensity)
+        ]
+        for scenario in ("Single", "Multi", "Surface"):
+            group = [row for row in intensity_rows if row["scenario"] == scenario]
+            mean = {
+                label: statistics.fmean(float(row[column]) for row in group)
+                for label, column in metrics.items()
+            }
+            compact_rows.append(
+                [
+                    f"{intensity:g}x", scenario,
+                    f"{mean['SAR Δ%']:.2f}", f"{mean['Time Δ%']:.2f}",
+                    f"{mean['Found Δ']:.2f}", f"{mean['Total Δ%']:.2f}",
+                    f"{mean['P95 Δ%']:.2f}", f"{mean['Max Δ%']:.2f}",
+                    f"{mean['UAV Δ%']:.2f}",
+                    sum(float(row["delta_survivor_total_pre_discovery_dose"]) < 0 for row in group),
+                    sum(float(row["delta_survivor_p95_pre_discovery_dose"]) < 0 for row in group),
+                    sum(float(row["delta_survivor_max_pre_discovery_dose"]) < 0 for row in group),
+                    sum(float(row["delta_uav_cumulative_excess_dose"]) < 0 for row in group),
+                    sum(float(row["aware_sar_likelihood_score"]) >= 0.95 * float(row["original_sar_likelihood_score"]) for row in group),
+                    f"{statistics.fmean(float(row['radiation_episodes']) for row in group):.2f}",
+                    f"{statistics.fmean(float(row['radiation_steps']) for row in group):.2f}",
+                ]
+            )
+            distribution_rows.append(
+                [
+                    f"{intensity:g}x", scenario,
+                    *[
+                        _compact_distribution([float(row[column]) for row in group])
+                        for column in metrics.values()
+                    ],
+                ]
+            )
+        pooled_rows.append(
+            [
+                f"{intensity:g}x",
+                *[
+                    f"{statistics.fmean(float(row[column]) for row in intensity_rows):.2f}"
+                    for column in metrics.values()
+                ],
+                sum(float(row["delta_survivor_total_pre_discovery_dose"]) < 0 for row in intensity_rows),
+                sum(float(row["aware_sar_likelihood_score"]) >= 0.95 * float(row["original_sar_likelihood_score"]) for row in intensity_rows),
+            ]
+        )
+
+    validation_rows = [row for row in compact_rows if row[0] == "1x"]
+    report = f"""# Frozen 50 m planner: independent validation and intensity sensitivity
+
+## Fixed design
+
+Formal parameters were frozen at Y={BASE_HAZARD_REFERENCE:g}, sigma={FORMAL_KERNEL_SIGMA_M:g} m and influence radius={FORMAL_INFLUENCE_RADIUS_M:g} m. The 20 seeds were imported from `09_final_experiment.py::TRIAL_SEEDS` and have no overlap with the parameter-selection seeds:
+
+`{', '.join(map(str, TRIAL_SEEDS))}`
+
+All **100/100 seed × intensity tests succeeded** (0 failed), producing 300 paired scenario rows. Each seed used one Original mission shared by all five intensity levels. Only source strength/activity was multiplied; background was unchanged.
+
+## PART A — Independent Final Validation at 1x
+
+These 20 seeds were unseen during Y selection. Deltas are Radiation-aware relative to the same seed's Original planner.
+
+{_markdown_table(
+    ["Intensity", "Scenario", "SAR mean Δ%", "Time mean Δ%", "Found mean Δ", "Total mean Δ%", "P95 mean Δ%", "Max mean Δ%", "UAV mean Δ%", "Total better /20", "P95 better /20", "Max better /20", "UAV better /20", "SAR ≥95% /20", "Mean episodes", "Mean radiation steps"],
+    validation_rows,
+)}
+
+## PART B — Radiation Intensity Sensitivity
+
+{_markdown_table(
+    ["Intensity", "Scenario", "SAR mean Δ%", "Time mean Δ%", "Found mean Δ", "Total mean Δ%", "P95 mean Δ%", "Max mean Δ%", "UAV mean Δ%", "Total better /20", "P95 better /20", "Max better /20", "UAV better /20", "SAR ≥95% /20", "Mean episodes", "Mean radiation steps"],
+    compact_rows,
+)}
+
+### Cross-morphology means
+
+{_markdown_table(
+    ["Intensity", "SAR Δ%", "Time Δ%", "Found Δ", "Total Δ%", "P95 Δ%", "Max Δ%", "UAV Δ%", "Total better /60", "SAR ≥95% /60"],
+    pooled_rows,
+)}
+
+### Full 20-seed distributions
+
+Each cell is `mean / median / sample SD [min, max]`. Absolute dose is not compared across intensity levels; all dose columns are paired RA-vs-Original percentage deltas within the same intensity.
+
+{_markdown_table(
+    ["Intensity", "Scenario", *metrics.keys()],
+    distribution_rows,
+)}
+
+## Interpretation
+
+### Independent 1x validation
+
+The unseen-seed validation supports a **morphology-qualified**, not universal, conclusion. At 1x, Single reduced survivor total/P95/maximum dose by 25.85%/38.85%/49.18% on average, with improvement in 18/19/16 seeds; Surface reductions were 57.47%/55.18%/54.15%, with improvement in 18/19/17 seeds. Their SAR likelihood costs were modest on average (-2.58% Single, -1.73% Surface), although time-discounted likelihood fell 16.60% and 6.99%.
+
+Multi is the weak morphology. Its median total and maximum dose changes were beneficial (-9.33% and -27.18%), and P95 improved in 17/20 seeds, but large adverse outliers moved the mean total to +1.31% and mean maximum to +55.63%. Multi also had the largest rescue cost: SAR -5.60%, time-discounted likelihood -25.52%, and 4.90 fewer survivors on average. The frozen planner therefore validates clearly for Single and Surface radiation-risk reduction, but only partially for Multi.
+
+UAV cumulative exposure is not consistently reduced: at 1x its mean change was +18.96%/+14.08%/+20.16% for Single/Multi/Surface, with reductions in only 11/6/10 seeds. The planner's demonstrated benefit is survivor pre-discovery dose, not lower UAV dose.
+
+### Intensity trend
+
+At 0.25x the planner has limited and morphology-dependent value. Single total dose was nearly neutral (-0.58%, 12/20 improved), Multi was worse on mean total (+12.57%, only 8/20 improved), while Surface still showed a large mean reduction (-51.03%, 16/20). The weak-hazard routes do **not** converge to Original: Point and Multi still enter one radiation episode lasting all 3600 steps, so SAR/time penalties remain.
+
+At 0.5x a stable benefit begins for Single and Surface: mean total dose changes reached -17.06% and -61.84%, while their mean SAR costs were only -1.24% and -1.46%. Multi remained mixed (+4.11% mean total, although median -7.40% and P95 -21.05%).
+
+At 1x the independent validation is strongest for Single and Surface as described above. At 2x and 4x, Single risk reduction strengthens monotonically: total dose changes progress to -37.74% and -42.68%, and all 20 seeds improve total and P95 at both levels. Surface remains strongly beneficial, reaching -64.51% total and -62.27% maximum at 4x. Multi improves only weakly with intensity: total is +1.47% at 2x and -0.26% at 4x, P95 remains about -20%, and maximum-dose means stay adverse because of outliers.
+
+Increasing intensity does not cause a monotonic rescue-performance collapse. Cross-morphology SAR change ranges from -2.42% to -4.24%, survivors found from -2.05 to -3.97, and neither worsens steadily from 0.25x to 4x. The time-discounted penalty is essentially intensity-invariant at about 16.0-16.6% overall; it is morphology-driven (about 16.5% Single, 25.5% Multi and 7% Surface), not severity-driven.
+
+The clearest hazard-benefit region is **2x-4x for Single and Surface**. Across all morphologies, total-dose improvement counts rise from 36/60 at 0.25x to 50/60 at 2x and 53/60 at 4x, while mean total reduction strengthens from -13.01% to -30.62% and -35.82%. This is evidence of useful intensity robustness, but not morphology-independent robustness: Multi remains the limiting case at every strength.
+
+Surface radiation-mode activity grows at the strongest level (mean 28.65 episodes and 773.25 steps at 4x versus 17.50 and 410.15 at 0.25x). Single and Multi remain in one 3600-step episode at every tested intensity. Thus stronger hazards increase Surface radiation engagement, while point morphologies were already saturated even at 0.25x.
+
+## Failures and output
+
+Failed tests: 0. Raw paired data remain in `intensity_summary.csv`; runtime and errors are in `run_status.csv`. No per-run figures, arrays, routes or duplicated Original outputs were retained.
+"""
+    (output_root / "intensity_report.md").write_text(report, encoding="utf-8")
+    _write_intensity_config(output_root, TRIAL_SEEDS, INTENSITY_MULTIPLIERS)
 
 
 def main() -> None:
@@ -2343,17 +2962,21 @@ def main() -> None:
         "phase",
         choices=(
             "preflight", "baseline", "single", "multi", "surface", "combined",
-            "all", "repeated-smoke", "repeated",
+            "all", "repeated-smoke", "repeated", "intensity-report",
         ),
         nargs="?",
         default="all",
     )
     args = parser.parse_args()
     if args.phase == "repeated-smoke":
-        run_spatial_repeated_trials(TRIAL_SEEDS[1:2], trial_id_start=2)
+        print(json.dumps(run_intensity_smoke(), indent=2))
         return
     if args.phase == "repeated":
-        run_spatial_repeated_trials(TRIAL_SEEDS)
+        run_intensity_repeated_trials(TRIAL_SEEDS)
+        generate_intensity_report()
+        return
+    if args.phase == "intensity-report":
+        generate_intensity_report()
         return
     context = load_frozen_context()
     baseline_path = FINAL_ROOT / "baseline_original" / "simulation" / "mission_steps.csv"

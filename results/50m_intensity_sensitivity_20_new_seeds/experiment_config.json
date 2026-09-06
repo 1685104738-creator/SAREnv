@@ -1,0 +1,70 @@
+{
+  "Y": 0.05,
+  "git_branch": "measure-of-map",
+  "git_commit_hash": "1ce95d6580dbae08023f41bc121b0b817ad7a2e0",
+  "independent_final_validation_multiplier": 1.0,
+  "influence_radius_m": 120.0,
+  "intensity_multipliers": [
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0
+  ],
+  "original_policy": "one radiation-blind Original mission per seed",
+  "point_background_uSv_h_unscaled": 0.2,
+  "point_baseline_reference_excess_uSv_h": 20000.0,
+  "seed_source": "examples/radiation/09_final_experiment.py::TRIAL_SEEDS",
+  "seeds": [
+    113,
+    227,
+    331,
+    439,
+    547,
+    653,
+    761,
+    877,
+    983,
+    1091,
+    1193,
+    1297,
+    1423,
+    1523,
+    1627,
+    1733,
+    1831,
+    1931,
+    2027,
+    2131
+  ],
+  "sigma_m": 40.0,
+  "smoke_test": {
+    "Y": 0.05,
+    "all_intensity_contracts_checked": [
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      4.0
+    ],
+    "background_unscaled": true,
+    "discarded": true,
+    "influence_radius_m": 120.0,
+    "intensity_multiplier": 1.0,
+    "runtime_s": 106.17802740004845,
+    "scenario_rows": 3,
+    "seed": 113,
+    "sigma_m": 40.0,
+    "status": "PASSED"
+  },
+  "status_counts": {
+    "FAILED": 0,
+    "PENDING": 0,
+    "SUCCESS": 100
+  },
+  "surface_background_uGy_h_unscaled": 0.0,
+  "surface_baseline_activity_density_bq_m2": 1000000.0,
+  "survivor_evaluation_height_m": 1.0,
+  "uav_sensing_and_evaluation_height_m": 50.0,
+  "updated_utc": "2026-09-01T19:19:26.177759+00:00"
+}
