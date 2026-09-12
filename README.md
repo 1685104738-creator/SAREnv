@@ -1,5 +1,19 @@
 # SAREnv: UAV Search and Rescue Dataset and Evaluation Framework
 
+## MSc Dissertation Extension and Development History
+
+This repository also contains an MSc dissertation extension of SAREnv with radiation modelling, online estimation, radiation-aware search planning, and extended evaluation.
+
+**The completed implementation is on [`measure-of-map`](https://github.com/1685104738-creator/SAREnv/tree/measure-of-map).** This default `main` branch retains the original framework source; its later documentation update adds this navigation notice.
+
+- [Read the extension overview, branch guide, and experiment entry points](https://github.com/1685104738-creator/SAREnv/blob/measure-of-map/README.md).
+- [Browse all 10 published development branches](https://github.com/1685104738-creator/SAREnv/branches).
+- [Inspect the retained development commits](https://github.com/1685104738-creator/SAREnv/commits/measure-of-map/).
+
+The extension includes large datasets and experiment outputs through Git LFS. Read its data and reproducibility notes before downloading. Historical branch commits were migrated to LFS; original development authors, timestamps, messages, and source contents were retained, while affected commit IDs changed.
+
+---
+
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0-green.svg)](https://github.com/namurproject/sarenv)
