@@ -1,0 +1,87 @@
+"""Generate a reusable base SAREnv dataset directly at the requested size."""
+
+import json
+from pathlib import Path
+
+import numpy as np
+from sarenv import (
+    CLIMATE_TEMPERATE,
+    ENVIRONMENT_TYPE_FLAT,
+    DataGenerator,
+    get_logger,
+)
+
+log = get_logger()
+
+EXAMPLE_DIRECTORY = Path(__file__).resolve().parent
+OUTPUT_DIRECTORY = (
+    EXAMPLE_DIRECTORY / "sarenv_outputs" / "radiation_area_01_small_20m"
+)
+TARGET_SIZE = "small"
+SAR_RESOLUTION_M = 20
+
+
+def run_base_dataset_export_example():
+    """Export one reusable Small base dataset without hazard layers."""
+    log.info("--- Starting Base SAREnv Dataset Export Example ---")
+
+    data_gen = DataGenerator()
+    initial_planning_point = (-2.66962,51.42351)
+
+    # This is the only example step that accesses Overpass and regenerates the
+    # lost-person probability raster.
+    data_gen.export_dataset(
+        center_point=initial_planning_point,
+        output_directory=str(OUTPUT_DIRECTORY),
+        environment_climate=CLIMATE_TEMPERATE,
+        environment_type=ENVIRONMENT_TYPE_FLAT,
+        meter_per_bin=SAR_RESOLUTION_M,
+        target_size=TARGET_SIZE,
+    )
+
+    heatmap_path = OUTPUT_DIRECTORY / "heatmap.npy"
+    features_path = OUTPUT_DIRECTORY / "features.geojson"
+    metadata_path = OUTPUT_DIRECTORY / "metadata.json"
+    expected_paths = (heatmap_path, features_path, metadata_path)
+    missing_paths = [path for path in expected_paths if not path.exists()]
+    if missing_paths:
+        missing_text = ", ".join(str(path) for path in missing_paths)
+        message = f"Base dataset export is missing: {missing_text}"
+        raise FileNotFoundError(message)
+
+    heatmap = np.load(heatmap_path, allow_pickle=False)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if tuple(metadata["raster_shape"]) != heatmap.shape:
+        raise ValueError(
+            "Base metadata raster shape does not match heatmap.npy."
+        )
+    if metadata["environment_size"] != TARGET_SIZE:
+        raise ValueError("Base metadata does not describe a Small environment.")
+    if not np.isclose(metadata["meter_per_bin"], SAR_RESOLUTION_M):
+        raise ValueError("Base metadata does not use the formal 20 m SAR resolution.")
+    minx, miny, maxx, maxy = metadata["bounds_projected"]
+    expected_shape = (
+        int(round((maxy - miny) / SAR_RESOLUTION_M)),
+        int(round((maxx - minx) / SAR_RESOLUTION_M)),
+    )
+    if heatmap.shape != expected_shape:
+        raise ValueError("Base bounds, resolution, and heatmap shape disagree.")
+    if not np.isclose(heatmap.sum(), 1.0, atol=1e-6):
+        raise ValueError("Direct-Small probability heatmap must sum to one.")
+
+    log.info("--- Base SAREnv dataset exported successfully ---")
+    log.info(f"Output directory: {OUTPUT_DIRECTORY}")
+    log.info(f"Requested environment size: {TARGET_SIZE}")
+    log.info(
+        f"Raster shape: {heatmap.shape}; "
+        f"lost-person probability sum: {heatmap.sum():.6f}"
+    )
+    log.info(
+        f"CRS: {metadata['projected_crs']}; "
+        f"resolution: {metadata['meter_per_bin']:.1f} m/bin"
+    )
+    return OUTPUT_DIRECTORY
+
+
+if __name__ == "__main__":
+    run_base_dataset_export_example()

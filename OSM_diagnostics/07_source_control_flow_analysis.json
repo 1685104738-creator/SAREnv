@@ -1,0 +1,37 @@
+{
+  "source_commit": "0f2d344d17c0b9c18cec2176dd9b171beba727d6",
+  "classification": "fail-soft / partial export is allowed",
+  "evidence": [
+    {
+      "file": "sarenv/io/osm_query.py",
+      "function": "query_features",
+      "lines": "38-43",
+      "behavior": "catches every Exception from ox.features_from_polygon, logs a warning, and returns None"
+    },
+    {
+      "file": "sarenv/core/generation.py",
+      "function": "process_feature_osm",
+      "lines": "47-51, 63-67",
+      "behavior": "converts wrapper None or no usable geometries to (category, None)"
+    },
+    {
+      "file": "sarenv/core/generation.py",
+      "function": "Environment._load_features",
+      "lines": "335-360",
+      "behavior": "submits all categories through an unconstrained ProcessPoolExecutor; stores None for failed categories and continues collecting others"
+    },
+    {
+      "file": "sarenv/core/generation.py",
+      "function": "Environment.generate_heatmaps / get_combined_heatmap",
+      "lines": "380-451",
+      "behavior": "only creates tasks for non-None/non-empty categories and skips None heatmaps when combining"
+    },
+    {
+      "file": "sarenv/core/generation.py",
+      "function": "DataGenerator.export_dataset",
+      "lines": "725-741, 855-877",
+      "behavior": "concatenates only non-None/non-empty feature GeoDataFrames and exports the partial collection if at least one category succeeded"
+    }
+  ],
+  "answer": "B: main does not fail fast per category. A failed query becomes None, and remaining successful categories can still produce heatmap.npy and features.geojson."
+}

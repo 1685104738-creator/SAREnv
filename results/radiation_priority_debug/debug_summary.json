@@ -1,0 +1,60 @@
+{
+  "background_uSv_h": 0.2,
+  "continuation_replans": 1,
+  "dataset_directory": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01",
+  "debug_crop_original_probability_mass": 0.015722893641083438,
+  "debug_crop_probability_contract": "conditional_sum_to_one",
+  "debug_crop_shape": [
+    21,
+    21
+  ],
+  "discarded_initial_normal_nodes": 33,
+  "estimated_observed_cells": 71357,
+  "estimated_total_cells": 398161,
+  "executed_distance_m": 1200.0000000000387,
+  "formal_sampling_frequency_hz": null,
+  "formal_sampling_spacing_m": null,
+  "formal_uav_speed_m_s": null,
+  "initial_budget_m": 1200.0,
+  "initial_normal_route_invalidated": true,
+  "initial_normal_route_nodes": 36,
+  "minimum_radiation_step_sar_score": 0.0010422735856449293,
+  "mode_history": [
+    "NORMAL",
+    "RADIATION",
+    "NORMAL",
+    "COMPLETE"
+  ],
+  "normal_steps": 4,
+  "outputs": {
+    "estimated_radiation_npz": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\estimated_radiation_grid.npz",
+    "estimated_radiation_png": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\estimated_radiation_debug.png",
+    "mission_steps_csv": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\mission_steps.csv",
+    "mode_events_csv": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\mode_events.csv",
+    "radiation_measurements_csv": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\radiation_measurements.csv",
+    "trajectory_png": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\results\\radiation_priority_debug\\trajectory_debug.png"
+  },
+  "purpose": "DEBUG_STRUCTURAL_DEMONSTRATION_ONLY",
+  "radiation_episodes": 1,
+  "radiation_step_distances_m": [
+    30.0,
+    42.426406871
+  ],
+  "radiation_steps": 29,
+  "remaining_budget_m": 0.0,
+  "repeated_executed_positions": 0,
+  "sampling_mode": "DEBUG_NODE_SAMPLING",
+  "source_model": "inverse_square_inspired_softened",
+  "source_position_m": [
+    522970.92049746704,
+    5696974.290406497
+  ],
+  "source_reference_excess_uSv_h": 20000.0,
+  "status": "COMPLETE",
+  "trigger_locations_m": [
+    [
+      523045.920497467,
+      5696929.290406497
+    ]
+  ]
+}

@@ -21,6 +21,7 @@ RADIUS_FLAT_DRY = [1.3, 2.1,6.6,13.1]
 RADIUS_MOUNTAINOUS_TEMPERATE = [1.1, 3.1,5.8,18.3]
 RADIUS_MOUNTAINOUS_DRY = [1.6, 3.2,6.5,19.3]
 
+ENVIRONMENT_SIZES = ("small", "medium", "large", "xlarge")
 
 
 def get_environment_radius(environment_type, environment_climate):
@@ -57,19 +58,21 @@ def get_environment_radius_by_size(environment_type, environment_climate, size):
     Returns:
         list: A list of radius values.
     """
-    if size == "small":
-        index = 0
-    elif size == "medium":
-        index = 1
-    elif size == "large":
-        index = 2
-    elif size == "xlarge":
-        index = 3
-    else:
-        raise ValueError(f"Invalid size: {size}. Expected one of ['small', 'medium', 'large', 'extra_large'].")
-    return get_environment_radius(environment_type,environment_climate)[index]
+    try:
+        index = ENVIRONMENT_SIZES.index(size)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid size: {size}. Expected one of {list(ENVIRONMENT_SIZES)}."
+        ) from exc
+
+    radii = get_environment_radius(environment_type, environment_climate)
+    if not radii:
+        raise ValueError(
+            "Unsupported environment type/climate combination: "
+            f"{environment_type!r}/{environment_climate!r}."
+        )
+    return radii[index]
 
 def get_available_sizes() -> list[str]:
     """Returns a list of all predefined size names."""
-    # This assumes a standard set of sizes. If sizes can vary, this might need adjustment.
-    return ["small", "medium", "large", "xlarge"]
+    return list(ENVIRONMENT_SIZES)

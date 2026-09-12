@@ -29,6 +29,9 @@ from .geometries import GeoPolygon
 
 log = logging_setup.get_logger()
 EPS = 1e-9
+# The public Overpass endpoint reports two slots, and two workers completed the
+# controlled full-feature acquisition without connection-timeout storms.
+OVERPASS_MAX_WORKERS = 2
 from ..utils.lost_person_behavior import (
     FEATURE_PROBABILITIES,
     CLIMATE_TEMPERATE,
@@ -47,7 +50,9 @@ def process_feature_osm(key_val_pair, query_polygon_wgs84, projected_crs):
     osm_geometries_dict = query_features(query_polygon_wgs84, tag_dict)
 
     if osm_geometries_dict is None:  # query_features now returns a dict or None
-        log.warning(f"No geometries returned from OSM query for features: {key}")
+        log.warning(
+            f"OSM feature data could not be retrieved or processed for: {key}"
+        )
         return key, None  # Return key and None for the GeoDataFrame
 
     all_geoms_for_key = []
@@ -305,12 +310,21 @@ class Environment:
         )
         self.minx, self.miny, self.maxx, self.maxy = self.polygon.geometry.bounds
 
-        num_bins_x = int(
-            abs(self.maxx - self.minx + 2 * self.buffer_val) / self.meter_per_bin
+        width_in_bins = (
+            abs(self.maxx - self.minx + 2 * self.buffer_val)
+            / self.meter_per_bin
         )
-        num_bins_y = int(
-            abs(self.maxy - self.miny + 2 * self.buffer_val) / self.meter_per_bin
+        height_in_bins = (
+            abs(self.maxy - self.miny + 2 * self.buffer_val)
+            / self.meter_per_bin
         )
+        # A projected circle can return from a WGS84 round-trip a few
+        # picometres below an exact bin boundary (for example 39.99999999997
+        # rather than 40). EPS prevents that numerical noise from dropping a
+        # complete row or column while preserving the existing floor behavior
+        # for genuinely partial bins.
+        num_bins_x = int(np.floor(width_in_bins + EPS))
+        num_bins_y = int(np.floor(height_in_bins + EPS))
 
         if num_bins_x <= 0:
             num_bins_x = 1
@@ -332,7 +346,14 @@ class Environment:
         query_polygon_wgs84 = GeoPolygon(self.polygon.geometry, crs=self.polygon.crs)
         query_polygon_wgs84.set_crs("EPSG:4326")  # Ensure the query polygon is in WGS84
 
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        log.info(
+            "Loading %d OSM feature categories with max_workers=%d",
+            len(self.tags),
+            OVERPASS_MAX_WORKERS,
+        )
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=OVERPASS_MAX_WORKERS
+        ) as executor:
             # Prepare arguments for each process
             tasks = [
                 (item, query_polygon_wgs84, self.projected_crs)
@@ -354,7 +375,7 @@ class Environment:
                             f"Stored {len(feature_gdf)} features for '{key}' in CRS {feature_gdf.crs}"
                         )
                     else:
-                        log.info(f"No features stored for '{key}'")
+                        log.info(f"No usable OSM feature data stored for '{key}'")
                 except Exception as exc:
                     log.error(f"Error processing feature {key}: {exc}", exc_info=True)
                     self.features[key] = None
@@ -519,7 +540,7 @@ class Environment:
 
 class DataGenerator:
     """
-    Generates and exports a complete, multi-size SAR environment dataset.
+    Generates and exports a SAR environment dataset at a requested size.
     """
 
     def __init__(self):
@@ -619,6 +640,31 @@ class DataGenerator:
         )
         geojson_poly = self._create_circular_polygon(center_lon, center_lat, radius_km)
 
+        projected_polygon = gpd.GeoSeries(
+            [geojson_poly], crs="EPSG:4326"
+        ).to_crs(projected_crs)
+        minx, miny, maxx, maxy = projected_polygon.total_bounds
+        expected_dimension_m = 2.0 * radius_km * 1000.0
+        log.info("Requested environment size: %s", size)
+        log.info(
+            "Generation bounds (%s): (%.3f, %.3f, %.3f, %.3f)",
+            projected_crs,
+            minx,
+            miny,
+            maxx,
+            maxy,
+        )
+        log.info("Generation width: %.3f m", maxx - minx)
+        log.info("Generation height: %.3f m", maxy - miny)
+        log.info(
+            "Expected %s dimensions: %.3f m x %.3f m",
+            size,
+            expected_dimension_m,
+            expected_dimension_m,
+        )
+        log.info("Large/XL intermediate generation: NO")
+        log.info("Cropping from larger environment: NO")
+
         try:
             env = (
                 self._builder.set_polygon(geojson_poly)
@@ -694,32 +740,50 @@ class DataGenerator:
         environment_type,
         environment_climate,
         meter_per_bin: int = 30,
+        target_size: str = "small",
     ):
         """
-        Generates and exports a single, large 'master' dataset for the 'xlarge' radius.
-        This master dataset contains all features and the full heatmap, which can be
-        dynamically clipped later by the DynamicDatasetLoader.
+        Generate and export a SAR dataset directly at ``target_size``.
+
+        The requested size controls the initial query polygon and raster bounds;
+        no larger intermediate environment is generated or cropped.
 
         Args:
             center_point (tuple[float, float]): The (longitude, latitude) center for the dataset.
-            output_directory (str): The directory where master files will be saved.
+            output_directory (str): The directory where dataset files will be saved.
             meter_per_bin (int): The resolution of the heatmap in meters per pixel.
+            target_size (str): One of the sizes returned by
+                ``get_available_sizes()``. Defaults to ``"small"``.
         """
-        log.info(f"--- Starting master dataset export to '{output_directory}' ---")
+        radius_km = get_environment_radius_by_size(
+            environment_type, environment_climate, target_size
+        )
+        log.info(
+            "--- Starting direct '%s' dataset export to '%s' ---",
+            target_size,
+            output_directory,
+        )
         os.makedirs(output_directory, exist_ok=True)
 
-        # 1. Generate the single, largest environment ('xlarge')
-        log.info(
-            "--- Generating master environment for the largest radius ('xlarge') ---"
-        )
+        # The requested size is applied before Environment construction. Building
+        # the Environment performs the OSM queries, so no larger query is hidden
+        # behind this export path.
+        log.info("--- Generating '%s' environment directly ---", target_size)
         master_env = self.generate_environment(
-            center_point, "xlarge", environment_climate, environment_type, meter_per_bin
+            center_point,
+            target_size,
+            environment_climate,
+            environment_type,
+            meter_per_bin,
         )
         if not master_env:
-            log.error("Failed to generate the master environment. Aborting export.")
+            log.error(
+                "Failed to generate the requested '%s' environment. Aborting export.",
+                target_size,
+            )
             return
 
-        # 2. Combine all features from the master environment into one GeoDataFrame
+        # 2. Combine all features from the requested environment.
         # TODO do not include shapely points
         master_features_list = []
         for key, gdf in master_env.features.items():
@@ -730,7 +794,8 @@ class DataGenerator:
 
         if not master_features_list:
             log.error(
-                "No features found in the master environment. No features file will be exported."
+                "No features found in the requested environment. "
+                "An empty features file will be exported."
             )
             master_features_gdf = gpd.GeoDataFrame(
                 columns=["geometry", "feature_type", "environemnt_type", "climate"," center_point", "meter_per_bin", "radius_km","bounds",],
@@ -741,8 +806,8 @@ class DataGenerator:
             master_features_gdf = pd.concat(master_features_list, ignore_index=True)
 
 
-        # 4. Generate and export the master probability map
-        log.info("--- Generating and exporting master probability map ---")
+        # 4. Generate and export the requested-size probability map.
+        log.info("--- Generating and exporting '%s' probability map ---", target_size)
         feature_heatmap = master_env.get_combined_heatmap()
 
         if feature_heatmap is None:
@@ -808,7 +873,7 @@ class DataGenerator:
             or np.sum(final_probability_map) == 0
         )
 
-        log.info("Calculating area-weighted probabilities for master features...")
+        log.info("Calculating area-weighted probabilities for selected features...")
         def calculate_distance_probability(geom, center_x, center_y, mu, sigma):
             """Calculates log-normal probability based on distance to center."""
             centroid = geom.centroid
@@ -862,9 +927,8 @@ class DataGenerator:
         geojson_dict["climate"] = environment_climate
         geojson_dict["center_point"] = center_point
         geojson_dict["meter_per_bin"] = meter_per_bin
-        geojson_dict["radius_km"] = get_environment_radius_by_size(
-            environment_type, environment_climate, "xlarge"
-        )
+        geojson_dict["environment_size"] = target_size
+        geojson_dict["radius_km"] = radius_km
         geojson_dict["bounds"] = [
             master_env.minx,
             master_env.miny,
@@ -879,10 +943,45 @@ class DataGenerator:
         heatmap_path = os.path.join(output_directory, "heatmap.npy")
         np.save(heatmap_path, final_probability_map)
         log.info(
-            f"Exported master probability map (shape: {final_probability_map.shape}) to {heatmap_path}"
+            "Exported '%s' probability map (shape: %s) to %s",
+            target_size,
+            final_probability_map.shape,
+            heatmap_path,
         )
 
-        log.info("--- Master dataset export completed. ---")
+        base_metadata = {
+            "schema_version": 1,
+            "dataset_type": "sarenv_base",
+            "quantity": "lost_person_probability",
+            "probability_contract": "sum_to_one_within_saved_environment",
+            "heatmap_filename": "heatmap.npy",
+            "features_filename": "features.geojson",
+            "center_point": [float(value) for value in center_point],
+            "environment_type": environment_type,
+            "climate": environment_climate,
+            "meter_per_bin": float(meter_per_bin),
+            "environment_size": target_size,
+            "radius_km": float(radius_km),
+            "projected_crs": str(master_env.projected_crs),
+            "bounds_projected": [
+                float(master_env.minx),
+                float(master_env.miny),
+                float(master_env.maxx),
+                float(master_env.maxy),
+            ],
+            "raster_shape": [
+                int(final_probability_map.shape[0]),
+                int(final_probability_map.shape[1]),
+            ],
+            "raster_origin": "lower",
+            "raster_axis_order": "row_y_column_x",
+        }
+        metadata_path = os.path.join(output_directory, "metadata.json")
+        with open(metadata_path, "w", encoding="utf-8") as metadata_file:
+            json.dump(base_metadata, metadata_file, indent=2, sort_keys=True)
+        log.info(f"Exported base dataset metadata to {metadata_path}")
+
+        log.info("--- Direct '%s' dataset export completed. ---", target_size)
 
     def export_dataset_from_polygon(
         self,

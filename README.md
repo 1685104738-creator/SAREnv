@@ -1,18 +1,72 @@
-# SAREnv: UAV Search and Rescue Dataset and Evaluation Framework
+# SAREnv: UAV Search and Rescue with a Radiation-Aware Extension
 
-## MSc Dissertation Extension and Development History
+This repository contains an MSc dissertation extension of [the original SAREnv project](https://github.com/namurproject/SAREnv). It preserves the original SAR dataset and evaluation framework and adds radiation simulation, online radiation estimation, radiation-aware search planning, and paired experiments.
 
-This repository also contains an MSc dissertation extension of SAREnv with radiation modelling, online estimation, radiation-aware search planning, and extended evaluation.
+**`main` is the final MSc dissertation implementation**, including the radiation-aware extension. Earlier development checkpoints remain available on the published branches. The original SAREnv baseline is retained on [`test-setup`](https://github.com/1685104738-creator/SAREnv/tree/test-setup).
 
-**The completed implementation is on [`measure-of-map`](https://github.com/1685104738-creator/SAREnv/tree/measure-of-map).** This default `main` branch retains the original framework source; its later documentation update adds this navigation notice.
+## Development History and Branches
 
-- [Read the extension overview, branch guide, and experiment entry points](https://github.com/1685104738-creator/SAREnv/blob/measure-of-map/README.md).
-- [Browse all 10 published development branches](https://github.com/1685104738-creator/SAREnv/branches).
-- [Inspect the retained development commits](https://github.com/1685104738-creator/SAREnv/commits/measure-of-map/).
+The development branches are published so that readers can inspect intermediate versions and their changes. Branch names identify saved checkpoints, not separate applications or a claim that each checkpoint is a tested release.
 
-The extension includes large datasets and experiment outputs through Git LFS. Read its data and reproducibility notes before downloading. Historical branch commits were migrated to LFS; original development authors, timestamps, messages, and source contents were retained, while affected commit IDs changed.
+| Branch | Checkpoint |
+| --- | --- |
+| [`main`](https://github.com/1685104738-creator/SAREnv/tree/main) | Final dissertation implementation, including the radiation-aware extension. |
+| [`test-setup`](https://github.com/1685104738-creator/SAREnv/tree/test-setup) | Original SAREnv baseline/setup checkpoint. |
+| [`develop`](https://github.com/1685104738-creator/SAREnv/tree/develop) | Early Fenswood Farm testing checkpoint. |
+| [`radiation`](https://github.com/1685104738-creator/SAREnv/tree/radiation) | First radiation-layer implementation checkpoint. |
+| [`radiation-path-plan`](https://github.com/1685104738-creator/SAREnv/tree/radiation-path-plan) | Saved radiation path-planning development checkpoint. |
+| [`radiation2`](https://github.com/1685104738-creator/SAREnv/tree/radiation2) | Alternate branch name pointing to the same commit as `radiation-path-plan`. |
+| [`radiation-evaluation`](https://github.com/1685104738-creator/SAREnv/tree/radiation-evaluation) | Subsequent evaluation development checkpoint. |
+| [`final-test`](https://github.com/1685104738-creator/SAREnv/tree/final-test) | Earlier final-experiment checkpoint. |
+| [`cut-off`](https://github.com/1685104738-creator/SAREnv/tree/cut-off) | Later final-experiment checkpoint. |
+| [`measure-of-map`](https://github.com/1685104738-creator/SAREnv/tree/measure-of-map) | Final radiation-development checkpoint before integration into `main`. |
 
----
+Browse [all branches](https://github.com/1685104738-creator/SAREnv/branches), inspect the [commit history](https://github.com/1685104738-creator/SAREnv/commits/main/), or compare the [baseline with the extension](https://github.com/1685104738-creator/SAREnv/compare/test-setup...main). The saved development checkpoints lie along the retained development history. The final radiation branch was then merged into `main`, preserving both the development commits and the earlier README navigation commit on `main`.
+
+**History preservation note:** A large experiment CSV was migrated to Git LFS before publishing these branches. This changed the affected commit IDs while retaining their original authors, timestamps, messages, and source-code contents. A subsequent maintenance commit preserved the local CSV line endings, so the history contains two LFS versions of that CSV. The later documentation and LFS maintenance commits are separate from the original development work.
+
+## Dissertation Extension: Where to Start
+
+| Component | Source / entry point |
+| --- | --- |
+| Original SAR dataset generation and loading | [`sarenv/core/`](sarenv/core/) |
+| Lost-person generation | [`sarenv/core/lost_person.py`](sarenv/core/lost_person.py) |
+| Original Greedy planner | [`sarenv/analytics/paths.py`](sarenv/analytics/paths.py) |
+| Point, multiple-point, and surface radiation modelling | [`sarenv/radiation/`](sarenv/radiation/) |
+| Sensor measurements and online estimation | [`sarenv/radiation/online/`](sarenv/radiation/online/) |
+| Radiation-aware candidate selection | [`sarenv/analytics/radiation_priority.py`](sarenv/analytics/radiation_priority.py) |
+| Executed-route state and mission-mode switching | [`route_execution.py`](sarenv/analytics/route_execution.py), [`mission_mode.py`](sarenv/analytics/mission_mode.py) |
+| Post-run survivor and UAV exposure evaluation | [`sarenv/evaluation/`](sarenv/evaluation/) |
+| Final scenarios and repeated experiments | [`09_final_experiment.py`](examples/radiation/09_final_experiment.py) |
+| Results-summary figures | [`10_generate_final_results_summary.py`](examples/radiation/10_generate_final_results_summary.py) |
+
+The radiation-aware planner prioritizes hazardous search areas among candidates that meet its SAR-score requirement. It is not a radiation-avoidance planner. The runner connects simulated sensor measurements to an incremental estimator; the planner reads estimates, while post-run evaluation reads radiation truth.
+
+After installing dependencies and obtaining the required dataset, run from the repository root:
+
+```bash
+# Small, independent radiation-only example
+python examples/radiation/00_point_source.py
+
+# Final scenario suite: writes experiment outputs
+python examples/radiation/09_final_experiment.py all
+
+# Repeated-experiment smoke run, or the full repeated experiment
+python examples/radiation/09_final_experiment.py repeated-smoke
+python examples/radiation/09_final_experiment.py repeated
+```
+
+The formal runner uses the dataset under `examples/sarenv_dataset/sarenv_outputs/radiation_area_01_small_20m/`. Scenario outputs go under `results/final_experiment/`; the repeated intensity study uses `results/50m_intensity_sensitivity_20_new_seeds/`. The full repeated experiment is substantially more work than the standalone example. See the runner's constants and phase dispatch for the actual experiment settings.
+
+### Data and Reproducibility
+
+This repository contains source code **and some datasets and experiment outputs**, including large Git LFS objects. A full clone with LFS data is therefore much larger than the Python source alone. LFS moves large-file storage out of ordinary Git blobs; it does not remove their download size.
+
+Not every local result is published: virtual environments, caches, logs, and several generated-result directories are ignored. In particular, `10_generate_final_results_summary.py` expects representative outputs under `results/final_experiment/`, which are not included in the tracked files. Its frozen legacy examples and the current runner use different measurement contracts; rerunning the current runner does not reproduce those historical examples exactly. The published repository is not a complete archive of every historical experiment output.
+
+## Original SAREnv Framework
+
+The following overview and upstream citation describe the original framework on which this extension is built.
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -20,7 +74,7 @@ The extension includes large datasets and experiment outputs through Git LFS. Re
 
 SAREnv is an open-access dataset and evaluation framework designed to support research in UAV-based search and rescue (SAR) algorithms. This toolkit addresses the critical need for standardized datasets and benchmarks in wilderness SAR operations, enabling systematic evaluation and comparison of algorithmic approaches including coverage path planning, probabilistic search, and information-theoretic exploration.
 
-If you have issues cloning/downloading the repository with GitHub LFS (Large File Storage), the full repo with large files included can be found here: https://nextcloud.sdu.dk/index.php/s/pap6MJao5iXHWfw
+The upstream README provides an [alternative download for the original SAREnv data](https://nextcloud.sdu.dk/index.php/s/pap6MJao5iXHWfw). This is an upstream resource, not an archive of this dissertation extension.
 
 ## 🎯 Project Goals
 
@@ -69,8 +123,8 @@ Unmanned Aerial Vehicles (UAVs) play an increasingly vital role in wilderness se
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/sarenv.git
-cd sarenv
+git clone --branch main https://github.com/1685104738-creator/SAREnv.git
+cd SAREnv
 
 # Install dependencies
 pip install -r requirements.txt

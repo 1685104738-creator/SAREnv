@@ -1,0 +1,32 @@
+{
+  "observation_time_context": "task start, before external branch switch",
+  "path": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\features.geojson",
+  "file_size_bytes": 16246835,
+  "last_write_time_local": "2026-08-25 15:42:53",
+  "feature_count": 33683,
+  "feature_type_counts": {
+    "road": 15358,
+    "structure": 18325
+  },
+  "present_categories": [
+    "structure",
+    "road"
+  ],
+  "missing_categories": [
+    "linear",
+    "drainage",
+    "water",
+    "brush",
+    "scrub",
+    "woodland",
+    "field",
+    "rock"
+  ],
+  "bbox_wgs84": [
+    10.134978815338195,
+    55.05866125257006,
+    10.44474559818122,
+    55.23395669999999
+  ],
+  "important_scope_note": "This observed two-category file is in Denmark, not the Bristol Direct Small bounds, so it cannot be category-by-category correlated with Probe 4. The external branch switch later removed it from the working tree."
+}

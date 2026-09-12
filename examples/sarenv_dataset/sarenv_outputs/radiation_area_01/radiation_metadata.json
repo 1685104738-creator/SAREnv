@@ -1,0 +1,42 @@
+{
+  "background_dose_rate": 0.2,
+  "environment_interaction": "none",
+  "field_model": "gaussian",
+  "field_model_requested": "default",
+  "intensity_type": "medium",
+  "measurement_model": "ground_truth",
+  "meter_per_bin": 30.0,
+  "peak_dose_rate": 5.0,
+  "placement_type": "near",
+  "projected_crs": "EPSG:32630",
+  "quantity": "ground_reference_gamma_dose_rate",
+  "raster_bounds_projected": [
+    513070.920497467,
+    5687074.290406497,
+    532870.920497467,
+    5706874.290406497
+  ],
+  "raster_shape": [
+    660,
+    660
+  ],
+  "reference_height_m": 1.0,
+  "seed": 42,
+  "shape_type": "stretched",
+  "sigma_x_m": 300.0,
+  "sigma_y_m": 100.0,
+  "source_angle_deg": 157.99623831076102,
+  "source_count": 1,
+  "source_distance_m": 382.1868145671588,
+  "source_position_projected": [
+    523114.11346274684,
+    5696619.94236301
+  ],
+  "source_position_wgs84": [
+    -2.6675836747901363,
+    51.42031798755739
+  ],
+  "source_type": "distributed",
+  "time_model": "static",
+  "unit": "uSv/h"
+}

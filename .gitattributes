@@ -1,1 +1,2 @@
 *.geojson filter=lfs diff=lfs merge=lfs -text
+results/comparative_time_series_results_n5_budget300000.csv filter=lfs diff=lfs merge=lfs -text

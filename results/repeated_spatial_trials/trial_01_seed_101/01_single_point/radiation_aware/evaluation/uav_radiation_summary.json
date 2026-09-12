@@ -1,0 +1,21 @@
+{
+  "distance_integral_unit": "uSv/h*m",
+  "dose_unit": "uSv",
+  "evaluation_speed_m_s": 10.0,
+  "integration_method": "piecewise_linear_route_fixed_distance_trapezoid",
+  "integration_step_m": 1.0,
+  "radiation_quantity": "synthetic_gamma_dose_rate",
+  "rate_unit": "uSv/h",
+  "sample_count": 86913,
+  "sampled_excess_rate_max": 9.433160801957936,
+  "sampled_excess_rate_min": 0.019316684623249123,
+  "sampled_total_rate_max": 9.633160801957935,
+  "sampled_total_rate_min": 0.21931668462324913,
+  "speed_status": "provisional",
+  "truth_query_height_m": 50.0,
+  "truth_source": "post_run_ground_truth_query_not_planner_estimator",
+  "uav_cumulative_excess_dose": 0.32424502998655347,
+  "uav_cumulative_total_dose": 0.8070877424607804,
+  "uav_excess_exposure_distance_integral": 11672.821079515925,
+  "uav_total_exposure_distance_integral": 29055.158728588096
+}

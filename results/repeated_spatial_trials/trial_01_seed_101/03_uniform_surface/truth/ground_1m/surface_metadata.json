@@ -1,0 +1,278 @@
+{
+  "activity_metadata": {
+    "activity_density_unit": "Bq/m^2",
+    "cell_activity_unit": "Bq",
+    "cell_area_m2": 1.0,
+    "generator_version": "2.0",
+    "grid": {
+      "axis_order": "row_y_column_x",
+      "bounds": [
+        522853.0,
+        5696520.0,
+        523454.0,
+        5697061.0
+      ],
+      "bounds_meaning": "pixel_edges",
+      "column_direction": "increasing_easting",
+      "crs": "EPSG:32630",
+      "height": 541,
+      "maximum_bounds_inclusive": false,
+      "origin": "lower",
+      "resolution_m": 1.0,
+      "row_direction": "increasing_northing",
+      "shape": [
+        541,
+        601
+      ],
+      "width": 601
+    },
+    "half_life_years": 30.007,
+    "model_type": "surface_activity_density_raster",
+    "quantity": "surface_activity_density",
+    "radioactive_decay_applied": false,
+    "radionuclide_name": "Cs-137",
+    "schema_version": 1,
+    "source": {
+      "activity_density_bq_m2": 1000000.0,
+      "activity_density_unit": "Bq/m^2",
+      "crs": "EPSG:32630",
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              523253.28812081943,
+              5696720.724516032
+            ],
+            [
+              523253.28812081943,
+              5696860.724516032
+            ],
+            [
+              523053.28812081943,
+              5696860.724516032
+            ],
+            [
+              523053.28812081943,
+              5696720.724516032
+            ],
+            [
+              523253.28812081943,
+              5696720.724516032
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "overlap_rule": "not_applicable",
+      "quantity": "surface_activity_density",
+      "source_id": "final_uniform_cs137_surface",
+      "surface_type": "uniform_polygon",
+      "zone_definitions": []
+    },
+    "surface_type": "uniform_polygon",
+    "total_activity_bq": 28000000000.0
+  },
+  "background_included": false,
+  "collision_air_kerma_metadata": {
+    "air_density_kg_m3": 1.205,
+    "background_included": false,
+    "conversion_formula": "fluence_rate * gamma_energy_mev * mev_to_j * mass_energy_absorption_coeff_air_m2_kg * seconds_per_hour * gy_to_ugy",
+    "dose_equivalent": false,
+    "effective_dose": false,
+    "fluence_to_kerma_uGy_h_per_ph_m2_s": 1.1186086791268144e-06,
+    "gamma_energy_mev": 0.661657,
+    "gamma_yield_applied_in_kerma_conversion": false,
+    "gamma_yield_applied_stage": "activity_to_photon_fluence_kernel",
+    "gamma_yield_per_decay": 0.851,
+    "generator_version": "2.0",
+    "grid": {
+      "axis_order": "row_y_column_x",
+      "bounds": [
+        522853.0,
+        5696520.0,
+        523454.0,
+        5697061.0
+      ],
+      "bounds_meaning": "pixel_edges",
+      "column_direction": "increasing_easting",
+      "crs": "EPSG:32630",
+      "height": 541,
+      "maximum_bounds_inclusive": false,
+      "origin": "lower",
+      "resolution_m": 1.0,
+      "row_direction": "increasing_northing",
+      "shape": [
+        541,
+        601
+      ],
+      "width": 601
+    },
+    "gy_to_ugy": 1000000.0,
+    "half_life_usage": "metadata_only_static_simulation",
+    "half_life_years": 30.007,
+    "mass_attenuation_coeff_air_m2_kg": 0.007752572415,
+    "mass_energy_absorption_coeff_air_m2_kg": 0.002931111765,
+    "mev_to_j": 1.602176634e-13,
+    "model_type": "cs137_collision_air_kerma_conversion",
+    "mu_air_m_inv": 0.009341849760075,
+    "output_unit": "uGy/h",
+    "primary_photons_only": true,
+    "quantity": "collision_air_kerma_rate",
+    "radionuclide_name": "Cs-137",
+    "schema_version": 1,
+    "seconds_per_hour": 3600.0,
+    "surface_type": "uniform_polygon"
+  },
+  "dataset_type": "physical_surface_radiation",
+  "files": {
+    "activity_density_bq_m2": "activity_density_bq_m2.npy",
+    "cell_activity_bq": "cell_activity_bq.npy",
+    "collision_air_kerma_rate_uGy_h": "collision_air_kerma_rate_uGy_h.npy",
+    "photon_fluence_rate_ph_m2_s": "photon_fluence_rate_ph_m2_s.npy"
+  },
+  "grid": {
+    "axis_order": "row_y_column_x",
+    "bounds": [
+      522853.0,
+      5696520.0,
+      523454.0,
+      5697061.0
+    ],
+    "bounds_meaning": "pixel_edges",
+    "column_direction": "increasing_easting",
+    "crs": "EPSG:32630",
+    "height": 541,
+    "maximum_bounds_inclusive": false,
+    "origin": "lower",
+    "resolution_m": 1.0,
+    "row_direction": "increasing_northing",
+    "shape": [
+      541,
+      601
+    ],
+    "width": 601
+  },
+  "minimum_raw_fft_value_before_clipping": 337.2204519037609,
+  "photon_fluence_metadata": {
+    "absolute_scaling_preserved": true,
+    "air_density_kg_m3": 1.205,
+    "background_included": false,
+    "cell_area_m2": 1.0,
+    "convolution_implementation": "scipy.signal.fftconvolve",
+    "convolution_mode": "same",
+    "convolution_type": "linear",
+    "distance_formula": "R=sqrt(dx^2+dy^2+observation_height_m^2)",
+    "gamma_energy_mev": 0.661657,
+    "gamma_yield_per_decay": 0.851,
+    "generator_version": "2.0",
+    "grid": {
+      "axis_order": "row_y_column_x",
+      "bounds": [
+        522853.0,
+        5696520.0,
+        523454.0,
+        5697061.0
+      ],
+      "bounds_meaning": "pixel_edges",
+      "column_direction": "increasing_easting",
+      "crs": "EPSG:32630",
+      "height": 541,
+      "maximum_bounds_inclusive": false,
+      "origin": "lower",
+      "resolution_m": 1.0,
+      "row_direction": "increasing_northing",
+      "shape": [
+        541,
+        601
+      ],
+      "width": 601
+    },
+    "half_life_usage": "metadata_only_static_simulation",
+    "half_life_years": 30.007,
+    "kernel_center_index": [
+      540,
+      600
+    ],
+    "kernel_class": "SurfacePhotonResponseKernel",
+    "kernel_cutoff": null,
+    "kernel_formula": "gamma_yield_per_decay * exp(-mu_air_m_inv * R) / (4*pi*R^2)",
+    "kernel_model": "planar_gamma_point_kernel_superposition",
+    "kernel_shape": [
+      1081,
+      1201
+    ],
+    "kernel_support": "complete_relative_offsets_of_current_grid",
+    "kernel_unit": "photons/m^2/decay",
+    "mass_attenuation_coeff_air_m2_kg": 0.007752572415,
+    "minimum_raw_fft_value_before_clipping": 337.2204519037609,
+    "model_type": "surface_gamma_point_kernel_superposition",
+    "mu_air_m_inv": 0.009341849760075,
+    "normalised": false,
+    "observation_height_m": 1.0,
+    "output_unit": "photons/m^2/s",
+    "physical_model": true,
+    "quantity": "photon_fluence_rate",
+    "radionuclide_name": "Cs-137",
+    "resolution_m": 1.0,
+    "schema_version": 1,
+    "source": {
+      "activity_density_bq_m2": 1000000.0,
+      "activity_density_unit": "Bq/m^2",
+      "crs": "EPSG:32630",
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              523253.28812081943,
+              5696720.724516032
+            ],
+            [
+              523253.28812081943,
+              5696860.724516032
+            ],
+            [
+              523053.28812081943,
+              5696860.724516032
+            ],
+            [
+              523053.28812081943,
+              5696720.724516032
+            ],
+            [
+              523253.28812081943,
+              5696720.724516032
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "overlap_rule": "not_applicable",
+      "quantity": "surface_activity_density",
+      "source_id": "final_uniform_cs137_surface",
+      "surface_type": "uniform_polygon",
+      "zone_definitions": []
+    },
+    "surface_type": "uniform_polygon",
+    "total_activity_bq": 28000000000.0
+  },
+  "quantities": {
+    "activity_density_bq_m2": {
+      "quantity": "surface_activity_density",
+      "unit": "Bq/m^2"
+    },
+    "cell_activity_bq": {
+      "quantity": "cell_activity",
+      "unit": "Bq"
+    },
+    "collision_air_kerma_rate_uGy_h": {
+      "quantity": "collision_air_kerma_rate",
+      "unit": "uGy/h"
+    },
+    "photon_fluence_rate_ph_m2_s": {
+      "quantity": "photon_fluence_rate",
+      "unit": "photons/m^2/s"
+    }
+  },
+  "scenario_type": "surface_only",
+  "schema_version": 2
+}

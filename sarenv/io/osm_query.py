@@ -1,6 +1,10 @@
 # sarenv/io/osm_query.py
 from pathlib import Path
+import random
+import time
+
 import osmnx as ox
+import requests
 import shapely
 from geojson import Feature, FeatureCollection, dump # Ensure geojson is in requirements
 
@@ -9,6 +13,28 @@ from ..utils.logging_setup import get_logger
 from ..core.geometries import GeoPolygon # Assuming GeoPolygon is defined in core.geometries
 
 log = get_logger()
+OVERPASS_USER_AGENT = "SAREnv/0.1.7 (academic research client)"
+# Total calls to ox.features_from_polygon, including the initial attempt.
+OVERPASS_MAX_ATTEMPTS = 3
+OVERPASS_RETRY_BASE_DELAY_SECONDS = 30.0
+OVERPASS_RETRY_BASE_JITTER_SECONDS = 5.0
+OVERPASS_TRANSIENT_NETWORK_EXCEPTIONS = (
+    requests.exceptions.ConnectTimeout,
+    requests.exceptions.ReadTimeout,
+    requests.exceptions.ConnectionError,
+)
+# Configure OSMnx's centralized HTTP header builder with a project-identifying
+# client name. The control requests returned HTTP 406 for requests' generic UA.
+ox.settings.http_user_agent = OVERPASS_USER_AGENT
+
+
+def _get_network_retry_delay(failed_attempt: int) -> float:
+    """Return exponential retry delay plus jitter after a failed attempt."""
+    multiplier = 2 ** (failed_attempt - 1)
+    backoff = OVERPASS_RETRY_BASE_DELAY_SECONDS * multiplier
+    maximum_jitter = OVERPASS_RETRY_BASE_JITTER_SECONDS * multiplier
+    return backoff + random.uniform(0.0, maximum_jitter)
+
 
 def query_features(area_geopolygon: GeoPolygon, tags_to_query: dict) -> dict | None:
     """
@@ -35,12 +61,48 @@ def query_features(area_geopolygon: GeoPolygon, tags_to_query: dict) -> dict | N
         raise ValueError("Query area must be in WGS84 (EPSG:4326) CRS.")
 
 
-    try:
-        # ox.features_from_polygon expects the polygon geometry itself
-        raw_osm_geometries_gdf = ox.features_from_polygon(area_geopolygon.get_geometry(), tags=tags_to_query)
-    except Exception as e:
-        log.warning("An error occurred while querying features from OSM: %s", str(e))
-        return None
+    for attempt in range(1, OVERPASS_MAX_ATTEMPTS + 1):
+        try:
+            # ox.features_from_polygon expects the polygon geometry itself
+            raw_osm_geometries_gdf = ox.features_from_polygon(
+                area_geopolygon.get_geometry(),
+                tags=tags_to_query,
+            )
+            break
+        except OVERPASS_TRANSIENT_NETWORK_EXCEPTIONS as exc:
+            if attempt == OVERPASS_MAX_ATTEMPTS:
+                log.error(
+                    "OSM query for tags %s failed after %d attempts due to "
+                    "transient network errors. Feature data could not be "
+                    "retrieved. Last error: %s: %s",
+                    str(tags_to_query),
+                    OVERPASS_MAX_ATTEMPTS,
+                    type(exc).__name__,
+                    str(exc),
+                )
+                return None
+
+            retry_delay = _get_network_retry_delay(attempt)
+            log.warning(
+                "Attempt %d/%d failed for OSM query with tags %s and %s: %s. "
+                "Retrying in %.1f seconds.",
+                attempt,
+                OVERPASS_MAX_ATTEMPTS,
+                str(tags_to_query),
+                type(exc).__name__,
+                str(exc),
+                retry_delay,
+            )
+            time.sleep(retry_delay)
+        except Exception as exc:
+            log.error(
+                "OSM query for tags %s failed with non-retryable %s: %s. "
+                "Feature data could not be retrieved.",
+                str(tags_to_query),
+                type(exc).__name__,
+                str(exc),
+            )
+            return None
 
     if raw_osm_geometries_gdf.empty:
         log.info("No features found from OSM for tags: %s", str(tags_to_query))

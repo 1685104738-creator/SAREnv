@@ -1,0 +1,33 @@
+{
+  "completion_reason": "mission_limit_reached",
+  "continuation_planner_runtime_s": 0.0,
+  "enter_events": 1,
+  "entry_threshold_progression": [
+    0.1
+  ],
+  "estimator_runtime_s": 1.3173859006201383,
+  "exit_events": 0,
+  "final_entry_threshold": 0.1,
+  "final_exit_threshold": 0.09000000000000001,
+  "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+  "mode_sequence": [
+    "NORMAL",
+    "RADIATION",
+    "COMPLETE"
+  ],
+  "normal_steps": 1,
+  "original_greedy_fallback_decisions": 2554,
+  "radiation_episodes": 1,
+  "radiation_planner_runtime_s": 2.167841000511544,
+  "radiation_priority_decisions": 1046,
+  "radiation_steps": 3600,
+  "route_sha256": "99adcc4e47021a850dd617ce0eddd473066e0640515cc6b6ad4159378a5d6387",
+  "scenario_id": "final_three_point_stress_scenario",
+  "status": "COMPLETE",
+  "survivors_sha256": "652c1bf882d7f537664edec320d40b4b9fe791a9901d666c8643c4978d05f17e",
+  "threshold_unit": "uSv/h",
+  "total_executed_moves": 3600,
+  "total_executed_nodes": 3601,
+  "total_route_distance_m": 86787.42417664865,
+  "wall_runtime_s": 10.92954290000489
+}

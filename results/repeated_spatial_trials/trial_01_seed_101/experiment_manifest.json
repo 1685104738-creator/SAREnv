@@ -1,0 +1,72 @@
+{
+  "branch": "radiation-evaluation",
+  "code_snapshot": {
+    "python_source_archive": "code_state/reproducibility_python_sources.zip",
+    "tracked_diff": "code_state/final_experiment_code.patch"
+  },
+  "created_utc": "2026-08-26T10:34:31.371202+00:00",
+  "dataset_directory": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m",
+  "dataset_files_sha256": {
+    "features.geojson": "0b30a476d1b818e27b8fb21797ac8b313b2c681640b78e8573e2753477035677",
+    "heatmap.npy": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+    "metadata.json": "03ee535b1a8c38479ca70fee7c237657b0882ac7cd103fbaf4b8b34e4837826c"
+  },
+  "experiment_name": "MSc dissertation FINAL experiment",
+  "frozen_parameters": {
+    "altitude_correction_assumption": "perfect_ground_equivalent_scalar",
+    "base_hazard_reference": 10.0,
+    "camera_detection_radius_m": 20.71067811865475,
+    "candidate_radiation_aggregation": "strict_max_over_overlapping_radiation_grid_cells",
+    "confirmation_samples": 1,
+    "dataset_bounds_projected": [
+      522370.9204974669,
+      5696374.290406497,
+      523570.920497467,
+      5697574.290406496
+    ],
+    "dataset_crs": "EPSG:32630",
+    "dataset_size": "small",
+    "distance_budget_m": null,
+    "evaluation_speed_m_s": 10.0,
+    "evaluation_speed_status": "provisional",
+    "fov_deg": 45.0,
+    "gaussian_sigma_m": 15.0,
+    "gaussian_update_radius_m": 45.0,
+    "heatmap_sha256": "fcf028cd0f1d1b5def5a950fe224de532cb75a4c724fb246f071c040967561ac",
+    "hysteresis_margin": 0.1,
+    "initial_entry_multiplier": 0.01,
+    "initial_entry_threshold": 0.1,
+    "mission_completion_rule": "all_searchable_cells_covered_or_native_greedy_move_ceiling",
+    "native_mission_move_allowance": 3600,
+    "planner_seed": 42,
+    "platform_altitude_m": 50.0,
+    "radiation_integration_step_m": 1.0,
+    "radiation_resolution_m": 1.0,
+    "sar_probability_sum": 1.0,
+    "sar_resolution_m": 20.0,
+    "sar_shape": [
+      60,
+      60
+    ],
+    "survivors_sha256": "652c1bf882d7f537664edec320d40b4b9fe791a9901d666c8643c4978d05f17e",
+    "value_reference_height_m": 1.0
+  },
+  "git_diff_check_output": [],
+  "git_diff_stat": [
+    " examples/radiation/09_final_experiment.py | 168 ++++++++++++++++++++++++++++--",
+    " examples/sarenv_dataset/features.geojson  |   3 -",
+    " examples/sarenv_dataset/heatmap.npy       | Bin 3484928 -> 0 bytes",
+    " 3 files changed, 159 insertions(+), 12 deletions(-)"
+  ],
+  "git_status_short": [
+    " M examples/radiation/09_final_experiment.py",
+    " D examples/sarenv_dataset/features.geojson",
+    " D examples/sarenv_dataset/heatmap.npy",
+    " M sarenv/evaluation/evaluator.py",
+    "?? OSM_diagnostics/",
+    "?? results/repeated_spatial_trials/"
+  ],
+  "head": "c3e200464f54b13be90f206e10e212eeff1d32b3",
+  "planner_seed": 42,
+  "survivors_sha256": "652c1bf882d7f537664edec320d40b4b9fe791a9901d666c8643c4978d05f17e"
+}

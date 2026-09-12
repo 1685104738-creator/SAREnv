@@ -1,0 +1,196 @@
+{
+  "source_path": "D:\\MSc_Dissertation\\01_Code\\SAREnv\\examples\\sarenv_dataset\\sarenv_outputs\\radiation_area_01_small_20m\\features.geojson",
+  "source_exists": true,
+  "expected_categories": [
+    "structure",
+    "road",
+    "linear",
+    "drainage",
+    "water",
+    "brush",
+    "scrub",
+    "woodland",
+    "field",
+    "rock"
+  ],
+  "tags_mapping": {
+    "structure": {
+      "building": true,
+      "man_made": true,
+      "bridge": true,
+      "tunnel": true
+    },
+    "road": {
+      "highway": true,
+      "tracktype": true
+    },
+    "linear": {
+      "railway": true,
+      "barrier": true,
+      "fence": true,
+      "wall": true,
+      "pipeline": true
+    },
+    "drainage": {
+      "waterway": [
+        "drain",
+        "ditch",
+        "culvert",
+        "canal"
+      ]
+    },
+    "water": {
+      "natural": [
+        "water",
+        "wetland"
+      ],
+      "water": true,
+      "wetland": true,
+      "reservoir": true
+    },
+    "brush": {
+      "landuse": [
+        "grass"
+      ]
+    },
+    "scrub": {
+      "natural": "scrub"
+    },
+    "woodland": {
+      "landuse": [
+        "forest",
+        "wood"
+      ],
+      "natural": "wood"
+    },
+    "field": {
+      "landuse": [
+        "farmland",
+        "farm",
+        "meadow"
+      ]
+    },
+    "rock": {
+      "natural": [
+        "rock",
+        "bare_rock",
+        "scree",
+        "cliff"
+      ]
+    }
+  },
+  "source_size_bytes": 500147,
+  "source_modified_time": 1787668974.1700783,
+  "top_level_keys": [
+    "type",
+    "features",
+    "bbox",
+    "environment_type",
+    "climate",
+    "center_point",
+    "meter_per_bin",
+    "environment_size",
+    "radius_km",
+    "bounds"
+  ],
+  "bbox": [
+    -2.678249371018727,
+    51.41811497979046,
+    -2.660990641063531,
+    51.428898876918616
+  ],
+  "bounds": [
+    522370.9204974669,
+    5696374.290406497,
+    523570.920497467,
+    5697574.290406496
+  ],
+  "center_point": [
+    -2.66962,
+    51.42351
+  ],
+  "feature_count": 913,
+  "feature_type_counts": {
+    "structure": 479,
+    "road": 308,
+    "linear": 85,
+    "brush": 17,
+    "scrub": 7,
+    "woodland": 10,
+    "field": 7
+  },
+  "geojson_geometry_type_counts": {
+    "Polygon": 514,
+    "LineString": 397,
+    "MultiLineString": 1,
+    "MultiPolygon": 1
+  },
+  "geometry_type_counts_by_category": {
+    "structure": {
+      "Polygon": 473,
+      "LineString": 6
+    },
+    "road": {
+      "LineString": 308
+    },
+    "linear": {
+      "LineString": 83,
+      "Polygon": 1,
+      "MultiLineString": 1
+    },
+    "brush": {
+      "Polygon": 17
+    },
+    "scrub": {
+      "Polygon": 7
+    },
+    "woodland": {
+      "Polygon": 9,
+      "MultiPolygon": 1
+    },
+    "field": {
+      "Polygon": 7
+    }
+  },
+  "multi_geometry_features": [
+    {
+      "feature_id": "826",
+      "feature_type": "linear",
+      "geometry_type": "MultiLineString",
+      "child_count": 2,
+      "child_types": [
+        "LineString",
+        "LineString"
+      ],
+      "is_valid": true,
+      "is_empty": false
+    },
+    {
+      "feature_id": "905",
+      "feature_type": "woodland",
+      "geometry_type": "MultiPolygon",
+      "child_count": 2,
+      "child_types": [
+        "Polygon",
+        "Polygon"
+      ],
+      "is_valid": true,
+      "is_empty": false
+    }
+  ],
+  "present_categories": [
+    "structure",
+    "road",
+    "linear",
+    "brush",
+    "scrub",
+    "woodland",
+    "field"
+  ],
+  "missing_categories": [
+    "drainage",
+    "water",
+    "rock"
+  ],
+  "note": "Missing in an exported file does not by itself distinguish PASS_EMPTY from FAIL_QUERY; correlate with Probe 4."
+}

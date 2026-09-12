@@ -1,0 +1,11 @@
+{
+  "approximately_unchanged_count": 0,
+  "both_unfound_count": 2,
+  "dose_unit": "uSv",
+  "original_unfound_radiation_aware_found_count": 6,
+  "radiation_aware_dose_higher_count": 63,
+  "radiation_aware_dose_lower_count": 37,
+  "radiation_aware_unfound_original_found_count": 15,
+  "survivor_count": 100,
+  "unchanged_tolerance_rule": "max(1e-12, 1e-6 * max(abs(pair doses)))"
+}

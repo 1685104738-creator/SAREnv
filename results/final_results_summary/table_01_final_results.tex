@@ -1,0 +1,34 @@
+\begin{table*}[t]
+\centering
+\caption{Mean paired changes for Radiation-Aware relative to Original Greedy across 20 seeds. The bold 1$\times$ rows are the independent final validation; other intensities are sensitivity tests.}
+\label{tab:final-radiation-results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrrrrrr}
+\toprule
+Morphology & Intensity & SAR likelihood $\Delta$ & Time SAR $\Delta$ & Found $\Delta$ & Total $\Delta$ & P95 $\Delta$ & Maximum $\Delta$ & UAV excess $\Delta$ & Total improved & P95 improved & Max improved \\
+\midrule
+Single & 0.25$\times$ & -2.29\% & -16.58\% & -1.60 & -0.58\% & -20.41\% & -35.98\% & +16.41\% & 12/20 & 19/20 & 15/20 \\
+Single & 0.5$\times$ & -1.24\% & -16.13\% & -0.55 & -17.06\% & -28.72\% & -42.75\% & +8.87\% & 15/20 & 19/20 & 14/20 \\
+\textbf{Single} & \textbf{1$\times$ (validation)} & \textbf{-2.58\%} & \textbf{-16.60\%} & \textbf{-2.15} & \textbf{-25.85\%} & \textbf{-38.85\%} & \textbf{-49.18\%} & \textbf{+18.96\%} & \textbf{18/20} & \textbf{19/20} & \textbf{16/20} \\
+Single & 2$\times$ & -0.85\% & -16.89\% & -0.50 & -37.74\% & -51.49\% & -46.59\% & +6.18\% & 20/20 & 20/20 & 15/20 \\
+Single & 4$\times$ & -1.11\% & -16.84\% & -0.60 & -42.68\% & -58.85\% & -51.40\% & +8.98\% & 20/20 & 20/20 & 16/20 \\
+\midrule
+Multi & 0.25$\times$ & -6.43\% & -25.85\% & -5.30 & +12.57\% & -16.07\% & +59.73\% & +14.58\% & 8/20 & 17/20 & 11/20 \\
+Multi & 0.5$\times$ & -4.55\% & -24.98\% & -4.50 & +4.11\% & -21.05\% & +43.81\% & +15.36\% & 11/20 & 18/20 & 13/20 \\
+\textbf{Multi} & \textbf{1$\times$ (validation)} & \textbf{-5.60\%} & \textbf{-25.52\%} & \textbf{-4.90} & \textbf{+1.31\%} & \textbf{-19.44\%} & \textbf{+55.63\%} & \textbf{+14.08\%} & \textbf{13/20} & \textbf{17/20} & \textbf{12/20} \\
+Multi & 2$\times$ & -4.99\% & -25.28\% & -4.80 & +1.47\% & -19.59\% & +64.22\% & +9.23\% & 12/20 & 18/20 & 12/20 \\
+Multi & 4$\times$ & -5.51\% & -25.53\% & -4.95 & -0.26\% & -20.83\% & +59.54\% & +12.32\% & 14/20 & 18/20 & 13/20 \\
+\midrule
+Surface & 0.25$\times$ & -3.99\% & -6.95\% & -5.00 & -51.03\% & -38.97\% & -42.87\% & +39.62\% & 16/20 & 16/20 & 15/20 \\
+Surface & 0.5$\times$ & -1.46\% & -6.94\% & -1.10 & -61.84\% & -49.12\% & -58.90\% & +44.74\% & 17/20 & 18/20 & 17/20 \\
+\textbf{Surface} & \textbf{1$\times$ (validation)} & \textbf{-1.73\%} & \textbf{-6.99\%} & \textbf{-2.45} & \textbf{-57.47\%} & \textbf{-55.18\%} & \textbf{-54.15\%} & \textbf{+20.16\%} & \textbf{18/20} & \textbf{19/20} & \textbf{17/20} \\
+Surface & 2$\times$ & -2.63\% & -7.38\% & -4.00 & -55.58\% & -54.31\% & -53.05\% & +46.29\% & 18/20 & 18/20 & 17/20 \\
+Surface & 4$\times$ & -2.67\% & -7.44\% & -3.20 & -64.51\% & -54.21\% & -62.27\% & +25.24\% & 19/20 & 18/20 & 19/20 \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{0.4em}
+\begin{minipage}{0.98\textwidth}\footnotesize
+\textit{Note:} All $\Delta$ columns except Found are percentages. Negative radiation-exposure values indicate reductions; negative SAR values indicate performance loss; negative Found values indicate fewer survivors found. Positive UAV values indicate greater cumulative UAV excess dose.
+\end{minipage}
+\end{table*}
